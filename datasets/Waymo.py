@@ -223,6 +223,11 @@ def transform(feature):
         feature[key] = func(feat)
     return feature
 
+def create_idx(tfrecord_dir, idx_dir):
+    for tfrecord in tqdm(glob.glob(tfrecord_dir+'/*')):
+        idxname = idx_dir + '/' + tfrecord.split('/')[-1]
+        call(["tfrecord2idx", tfrecord, idxname])
+
 def WaymoDataset(tfrecord_dir, idx_dir):
     tfrecord_pattern = tfrecord_dir+'/{}'
     index_pattern = idx_dir+'/{}'
@@ -244,8 +249,3 @@ def waymo_collate_fn(batch, GD=16, GS=1400):
         past_states = np.where(past_states_valid[..., None], past_states, np.nan)
 
     return batch
-
-def create_idx(tfrecord_dir, idx_dir):
-    for tfrecord in tqdm(glob.glob(tfrecord_dir+'/*')):
-        idxname = idx_dir + '/' + tfrecord.split('/')[-1]
-        call(["tfrecord2idx", tfrecord, idxname])
