@@ -293,15 +293,24 @@ def collate_target_flow_field(data):
     # TODO: collate ground truth flow field
     future_positions = np.stack((data['state/future/x'], data['state/future/y']), axis=-1)
     future_velocities = np.stack((data['state/future/velocity_x'], data['state/future/velocity_y']), axis=-1)
+    future_states_valid = data['state/future/valid'] > 0.
 
     print(future_positions.shape)
     print(future_velocities.shape)
+    print(future_states_valid.shape)
+
+    # filter future_positions and future_velocities by future_states_valid
+    # produce flow estimate tensor
+
     return None
 
 def collate_target_occupancy_grid(data):
+    future_positions = np.stack((data['state/future/x'], data['state/future/y']), axis=-1)
     # TODO: collate ground truth occupancy grid
     return None
 
+# TODO: We need to figure out how we are handling time in the differential equations?
+# can we use the timestamps in the data set or should we normalize them to be [1,11] and [1,80]?
 def waymo_collate_fn(batch, GD=16, GS=1400):
     for data in batch:
         # TODO: what do to if there is more then one datum in the batch?
