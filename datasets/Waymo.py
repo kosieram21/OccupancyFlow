@@ -236,16 +236,79 @@ def WaymoDataset(tfrecord_dir, idx_dir):
     dataset = MultiTFRecordDataset(tfrecord_pattern, index_pattern, splits, description=features_description, transform=transform, infinite=False)
     return dataset
 
+def collate_agent_trajectories(data):
+    past_states = np.stack((data['state/past/x'], data['state/past/y'], data['state/past/bbox_yaw'],
+                            data['state/past/velocity_x'], data['state/past/velocity_y'], data['state/past/vel_yaw'],
+                            data['state/past/width'], data['state/past/length'],
+                            data['state/past/timestamp_micros']), axis=-1)
+    past_states_valid = data['state/past/valid'] > 0.
+
+    current_states = np.stack((data['state/current/x'], data['state/current/y'], data['state/current/bbox_yaw'],
+                               data['state/current/velocity_x'], data['state/current/velocity_y'], data['state/current/vel_yaw'],
+                               data['state/current/width'], data['state/current/length'],
+                               data['state/current/timestamp_micros']), axis=-1)
+    current_states_valid = data['state/current/valid'] > 0.
+
+    observed_states = np.concatenate((past_states, current_states), axis=1)
+    observed_states_valid = np.concatenate((past_states_valid, current_states_valid), axis=1)
+
+    any_observed_states_valid_mask = np.sum(observed_states_valid, axis=1) > 0
+    observed_states = observed_states[any_observed_states_valid_mask]
+    observed_states_valid = observed_states_valid[any_observed_states_valid_mask]
+    observed_states = np.where(observed_states_valid[..., None], observed_states, np.nan)
+
+    return torch.FloatTensor(observed_states)
+
+def collate_road_graph(data):
+    # [20000x6]
+    road_graph = np.concatenate((data['roadgraph_samples/id'], 
+                                 data['roadgraph_samples/type'], 
+                                 data['roadgraph_samples/xyz'][:,:2], 
+                                 data['roadgraph_samples/dir'][:,:2]), axis=-1)
+    # TODO: when would the road graph not be valid and what should we do for non-valid graph cells
+    road_graph_valid = data['roadgraph_samples/valid'] > 0.
+
+    return torch.FloatTensor(road_graph)
+
+def collate_traffic_light_state(data):
+    # [16x11x3] (what is the 16? number of lights in total?)
+    # SceneTransformer transposed these... why? I think so the first dim is per light (if assumtion that 16 = max lights)
+    past_traffic_light_states = np.stack((data['traffic_light_state/past/state'].T,
+                                          data['traffic_light_state/past/x'].T,
+                                          data['traffic_light_state/past/y'].T), axis=-1)
+    past_traffic_light_states_valid = data['traffic_light_state/past/valid'].T > 0.
+    
+    current_traffic_light_states = np.stack((data['traffic_light_state/current/state'].T,
+                                             data['traffic_light_state/current/x'].T,
+                                             data['traffic_light_state/current/y'].T), axis=-1)
+    current_traffic_light_states_valid = data['traffic_light_state/current/valid'].T > 0.
+
+    traffic_light_states = np.concatenate((past_traffic_light_states, current_traffic_light_states), axis=1)
+    # TODO: when would the traffic light state not be valid and what should we do for non-valid states
+    traffic_light_states_valid = np.concatenate((past_traffic_light_states_valid, current_traffic_light_states_valid), axis=1)
+
+    return torch.FloatTensor(traffic_light_states)
+
+def collate_target_flow_field(data):
+    # TODO: collate ground truth flow field
+    future_positions = np.stack((data['state/future/x'], data['state/future/y']), axis=-1)
+    future_velocities = np.stack((data['state/future/velocity_x'], data['state/future/velocity_y']), axis=-1)
+
+    print(future_positions.shape)
+    print(future_velocities.shape)
+    return None
+
+def collate_target_occupancy_grid(data):
+    # TODO: collate ground truth occupancy grid
+    return None
+
 def waymo_collate_fn(batch, GD=16, GS=1400):
     for data in batch:
-        past_states = np.stack((data['state/past/x'], data['state/past/y'], data['state/past/bbox_yaw'],
-                                data['state/past/velocity_x'], data['state/past/velocity_y'], data['state/past/vel_yaw'],
-                                data['state/past/width'], data['state/past/length'],
-                                data['state/past/timestamp_micros']), axis=-1)
-        past_states_valid = data['state/past/valid'] > 0.
-        any_past_states_valid_mask = np.sum(past_states_valid, axis=1) > 0
-        past_states = past_states[any_past_states_valid_mask]
-        past_states_valid = past_states_valid[any_past_states_valid_mask]
-        past_states = np.where(past_states_valid[..., None], past_states, np.nan)
+        # TODO: what do to if there is more then one datum in the batch?
+        agent_trajectories = collate_agent_trajectories(data)
+        road_graph = collate_road_graph(data)
+        traffic_light_state = collate_traffic_light_state(data)
+        target_flow_field = collate_target_flow_field(data)
+        target_occupancy_grid = collate_target_occupancy_grid(data)
 
-    return batch
+    return agent_trajectories, road_graph, traffic_light_state, target_flow_field, target_occupancy_grid
