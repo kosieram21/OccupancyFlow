@@ -21,23 +21,27 @@ class PositionalEncoding(nn.Module):
 
 
 class Transformer(nn.Module):
-    def __init__(self, input_dim, hidden_dim, num_layers, num_heads):
+    def __init__(self, token_dim, num_layers, num_heads):
         super().__init__()
 
-        self.hidden_dim = hidden_dim
-        self.embedding = nn.Sequential(
-            nn.Linear(input_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim))
-        self.positional_enocding = PositionalEncoding(d_model=hidden_dim)
-        self.transformer_layers = nn.TransformerEncoderLayer(d_model=hidden_dim, nhead=num_heads, batch_first=True)
+        self.token_dim = token_dim
+        self.positional_enocding = PositionalEncoding(d_model=token_dim)
+        self.transformer_layers = nn.TransformerEncoderLayer(d_model=token_dim, nhead=num_heads, batch_first=True)
         self.encoder = nn.TransformerEncoder(encoder_layer=self.transformer_layers, num_layers=num_layers)
 
-    def forward(self, t, x):
-        x = self.embedding(x) * math.sqrt(self.hidden_dim)
+    def forward(self, x):
+        if x.dim() == 2:
+            x = x.unsqueeze(0)
+
+        # TODO: should positional encoding and scaling be d_model be in this class?
+        # we are going to do intermediate fusion with the visual features so a cross-attention
+        # fusion module will be sandwitched between two of these Transformer Modules
+        x = x * math.sqrt(self.token_dim)
         x = self.positional_enocding(x)
         causal_mask = torch.nn.Transformer.generate_square_subsequent_mask(x.size(1)).to(x.device)
         embedding = self.encoder(x, mask=causal_mask, is_causal=True)
-        return embedding[:, -1, :]
+
+        if embedding.size(0) == 1:
+            embedding = embedding.squeeze(0)
+
+        return embedding
