@@ -38,11 +38,11 @@ class VectorField(torch.nn.Module):
 		return out
 	
 
-class CDE(torch.nn.Module):
+class CDE(nn.Module):
 	def __init__(self, input_dim, embedding_dim, hidden_dim, num_layers):
 		super(CDE, self).__init__()
-		self.embed = torch.nn.Linear(input_dim + 1, embedding_dim)
-		self.f = CDEFunc(input_dim + 1, embedding_dim, hidden_dim, num_layers)
+		self.embed = torch.nn.Linear(input_dim, embedding_dim)
+		self.f = CDEFunc(input_dim, embedding_dim, hidden_dim, num_layers)
 
 	def forward(self, t, x):
 		spline = NaturalCubicSpline(t, x)

@@ -237,6 +237,17 @@ def WaymoDataset(tfrecord_dir, idx_dir):
     return dataset
 
 def collate_agent_trajectories(data):
+    # TODO: delete these prints
+    print('past times:')
+    print(f" observed: {data['state/past/timestamp_micros'][0] / 1000000}")
+    print(f' theoretical: {[i / 10 for i in range(10)]}')
+    print('current time:')
+    print(f" observed: {data['state/current/timestamp_micros'][0] / 1000000}")
+    print(' theoretical: [1.0]')
+    print('future times:')
+    print(f" observed: {data['state/future/timestamp_micros'][0] / 1000000}")
+    print(f' theoretical: {[i / 10 for i in range(11, 91)]}')
+
     past_states = np.stack((data['state/past/x'], data['state/past/y'], data['state/past/bbox_yaw'],
                             data['state/past/velocity_x'], data['state/past/velocity_y'], data['state/past/vel_yaw'],
                             data['state/past/width'], data['state/past/length'],
@@ -295,9 +306,9 @@ def collate_target_flow_field(data):
     future_velocities = np.stack((data['state/future/velocity_x'], data['state/future/velocity_y']), axis=-1)
     future_states_valid = data['state/future/valid'] > 0.
 
-    print(future_positions.shape)
-    print(future_velocities.shape)
-    print(future_states_valid.shape)
+    #print(future_positions.shape)
+    #print(future_velocities.shape)
+    #print(future_states_valid.shape)
 
     # filter future_positions and future_velocities by future_states_valid
     # produce flow estimate tensor
