@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
-from model.layers.CDE import CDE
-from model.layers.GRU import GRU
-from model.layers.Transformer import Transformer
+from model.layers import CDE
+from model.layers import GRU
+from model.layers import Transformer
 
 # TODO: need to work on encoder model inputs
 class Encoder(nn.Module):
@@ -18,6 +18,8 @@ class Encoder(nn.Module):
                                   embedding_dim=token_dim, 
                                   hidden_dim=motion_encoder_hidden_dim, 
                                   num_layers=4)
+        
+        self.visual_encoder = None
         
         self.self_attention_transformer = Transformer(token_dim=token_dim,
                                                       num_layers=4,

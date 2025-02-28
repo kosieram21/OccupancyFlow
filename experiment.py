@@ -1,6 +1,6 @@
 from torch.utils.data import DataLoader
 from datasets.Waymo import WaymoDataset, waymo_collate_fn, create_idx
-from model.Encoder import Encoder
+from model import Encoder
 
 should_index = False
 

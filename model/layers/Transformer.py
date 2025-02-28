@@ -39,9 +39,9 @@ class Transformer(nn.Module):
         x = x * math.sqrt(self.token_dim)
         x = self.positional_enocding(x)
         causal_mask = torch.nn.Transformer.generate_square_subsequent_mask(x.size(1)).to(x.device)
-        embedding = self.encoder(x, mask=causal_mask, is_causal=True)
+        x = self.encoder(x, mask=causal_mask, is_causal=True)
 
-        if embedding.size(0) == 1:
-            embedding = embedding.squeeze(0)
+        if x.size(0) == 1:
+            x = x.squeeze(0)
 
-        return embedding
+        return x
