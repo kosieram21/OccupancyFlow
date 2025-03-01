@@ -272,6 +272,7 @@ def collate_agent_trajectories(data):
 
 def collate_road_graph(data):
     # [20000x6]
+    print(data['roadgraph_samples/id'])
     road_graph = np.concatenate((data['roadgraph_samples/id'], 
                                  data['roadgraph_samples/type'], 
                                  data['roadgraph_samples/xyz'][:,:2], 
