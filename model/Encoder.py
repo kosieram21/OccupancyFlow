@@ -3,20 +3,18 @@ import torch
 import torch.nn as nn
 from model.layers import CDE
 from model.layers import GRU
-from model.layers import PositionalEncoding
 from model.layers import Transformer
+from model.layers import SwinTransformer
 
 # TODO: need to work on encoder model inputs
 class Encoder(nn.Module):
     def __init__(self, 
-                 trajectory_feature_dim, token_dim, embedding_dim,
-                 motion_encoder_hidden_dim, motion_encoder_seq_len):
+                 road_map_image_size, trajectory_feature_dim, 
+                 motion_encoder_hidden_dim, motion_encoder_seq_len,
+                 token_dim, embedding_dim):
         super(Encoder, self).__init__()
 
         assert embedding_dim % 2 == 0, "embedding_dim must be divisible by 2 for bidirectional GRU"
-
-        self.token_dim = token_dim
-        self.positional_enocding = PositionalEncoding(d_model=token_dim)
 
         self.motion_encoder_seq_len = motion_encoder_seq_len
         self.motion_encoder = CDE(input_dim=trajectory_feature_dim, 
@@ -24,30 +22,38 @@ class Encoder(nn.Module):
                                   hidden_dim=motion_encoder_hidden_dim, 
                                   num_layers=4)
         
-        self.visual_encoder = None
+        # TODO: need to figure out how to properly configure the Swin-T
+        self.visual_encoder = SwinTransformer(img_size=road_map_image_size,
+                                              embed_dim=96)
         
         self.self_attention_transformer = Transformer(token_dim=token_dim,
                                                       num_layers=4,
                                                       num_heads=8)
         
+        # TODO: What is the appropriate pooling module
         self.pooling_module = GRU(input_dim=token_dim,
                                   hidden_dim=embedding_dim // 2,
                                   num_layers=4,
                                   bidirectional=True)
 
-    def forward(self, agent_trajectories, road_graph, traffic_light_state):
+    def forward(self, road_map, agent_trajectories):
         t = torch.linspace(0., 1., self.motion_encoder_seq_len).to(agent_trajectories)
         print(agent_trajectories.shape)
         print(t.shape)
         agent_tokens = self.motion_encoder(t, agent_trajectories)
         print(agent_tokens.shape)
-        agent_tokens = agent_tokens * math.sqrt(self.token_dim)
-        agent_tokens = self.positional_enocding(agent_tokens)
+        print(road_map.shape)
+
+        # TODO: we should rework the model so that it is batched
+        if road_map.dim() == 3:
+            road_map = road_map.unsqueeze(0)
+        environment_tokens = self.visual_encoder(road_map)
+        if environment_tokens.size(0) == 1:
+            environment_tokens = environment_tokens.squeeze(0)
+        print(environment_tokens.shape)
+
         agent_tokens = self.self_attention_transformer(agent_tokens)
-        # self-attention transformer
-        # cross-attention (road_graph) transformer
-        # self-attention transformer
-        # cross-attention (traffic_light_state) transformer
+        # cross-attention (rasterized road map) transformer
         # self-attention transformer
         print(agent_tokens.shape)
         embedding = self.pooling_module(agent_tokens)

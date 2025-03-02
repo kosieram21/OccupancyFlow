@@ -238,15 +238,15 @@ def WaymoDataset(tfrecord_dir, idx_dir):
 
 def collate_agent_trajectories(data):
     # TODO: delete these prints
-    print('past times:')
-    print(f" observed: {data['state/past/timestamp_micros'][0] / 1000000}")
-    print(f' theoretical: {[i / 10 for i in range(10)]}')
-    print('current time:')
-    print(f" observed: {data['state/current/timestamp_micros'][0] / 1000000}")
-    print(' theoretical: [1.0]')
-    print('future times:')
-    print(f" observed: {data['state/future/timestamp_micros'][0] / 1000000}")
-    print(f' theoretical: {[i / 10 for i in range(11, 91)]}')
+    #print('past times:')
+    #print(f" observed: {data['state/past/timestamp_micros'][0] / 1000000}")
+    #print(f' theoretical: {[i / 10 for i in range(10)]}')
+    #print('current time:')
+    #print(f" observed: {data['state/current/timestamp_micros'][0] / 1000000}")
+    #print(' theoretical: [1.0]')
+    #print('future times:')
+    #print(f" observed: {data['state/future/timestamp_micros'][0] / 1000000}")
+    #print(f' theoretical: {[i / 10 for i in range(11, 91)]}')
 
     past_states = np.stack((data['state/past/x'], data['state/past/y'], data['state/past/bbox_yaw'],
                             data['state/past/velocity_x'], data['state/past/velocity_y'], data['state/past/vel_yaw'],
@@ -270,9 +270,9 @@ def collate_agent_trajectories(data):
 
     return torch.FloatTensor(observed_states)
 
+# TODO: delete
 def collate_road_graph(data):
     # [20000x6]
-    print(data['roadgraph_samples/id'])
     road_graph = np.concatenate((data['roadgraph_samples/id'], 
                                  data['roadgraph_samples/type'], 
                                  data['roadgraph_samples/xyz'][:,:2], 
@@ -282,6 +282,7 @@ def collate_road_graph(data):
 
     return torch.FloatTensor(road_graph)
 
+# TODO: delete
 def collate_traffic_light_state(data):
     # [16x11x3] (what is the 16? number of lights in total?)
     # SceneTransformer transposed these... why? I think so the first dim is per light (if assumtion that 16 = max lights)
@@ -300,6 +301,11 @@ def collate_traffic_light_state(data):
     traffic_light_states_valid = np.concatenate((past_traffic_light_states_valid, current_traffic_light_states_valid), axis=1)
 
     return torch.FloatTensor(traffic_light_states)
+
+def collate_road_map(data):
+    # TODO: build rasterized rgb image from road graph and traffic light states
+    road_map = torch.rand(224, 224, 3) # should be 256x256x3
+    return road_map
 
 def collate_target_flow_field(data):
     # TODO: collate ground truth flow field
@@ -321,15 +327,12 @@ def collate_target_occupancy_grid(data):
     # TODO: collate ground truth occupancy grid
     return None
 
-# TODO: We need to figure out how we are handling time in the differential equations?
-# can we use the timestamps in the data set or should we normalize them to be [1,11] and [1,80]?
-def waymo_collate_fn(batch, GD=16, GS=1400):
+def waymo_collate_fn(batch):
     for data in batch:
         # TODO: what do to if there is more then one datum in the batch?
+        road_map = collate_road_map(data)
         agent_trajectories = collate_agent_trajectories(data)
-        road_graph = collate_road_graph(data)
-        traffic_light_state = collate_traffic_light_state(data)
         target_flow_field = collate_target_flow_field(data)
         target_occupancy_grid = collate_target_occupancy_grid(data)
 
-    return agent_trajectories, road_graph, traffic_light_state, target_flow_field, target_occupancy_grid
+    return road_map, agent_trajectories, target_flow_field, target_occupancy_grid

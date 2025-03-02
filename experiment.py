@@ -13,11 +13,12 @@ if should_index:
 dataset = WaymoDataset(tfrecord_path, idx_path)
 dataloader = DataLoader(dataset, batch_size=1, collate_fn=lambda x: waymo_collate_fn(x))
 
-encoder = Encoder(trajectory_feature_dim=9, 
-                  token_dim=128, embedding_dim=1024,
-                  motion_encoder_hidden_dim=512, motion_encoder_seq_len=11)
+encoder = Encoder(road_map_image_size=224, trajectory_feature_dim=9, 
+                  motion_encoder_hidden_dim=512, motion_encoder_seq_len=11,
+                  token_dim=768, embedding_dim=1024)
+                  #token_dim=128, embedding_dim=1024)
 
-agent_trajectories, road_graph, traffic_light_state, target_flow_field, target_occupancy_grid = next(iter(dataloader))
-embedding = encoder(agent_trajectories, road_graph, traffic_light_state)
+road_map, agent_trajectories, target_flow_field, target_occupancy_grid = next(iter(dataloader))
+embedding = encoder(road_map, agent_trajectories)
 #for agent_trajectories, road_graph, traffic_light_state, target_flow_field, target_occupancy_grid in dataloader:
 #    embedding = encoder(agent_trajectories, road_graph, traffic_light_state)
