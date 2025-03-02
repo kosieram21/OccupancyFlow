@@ -1,4 +1,3 @@
-import math
 import torch.nn as nn
 
 class SelfAttentionTransformer(nn.Module):
@@ -9,6 +8,5 @@ class SelfAttentionTransformer(nn.Module):
         self.encoder = nn.TransformerEncoder(encoder_layer=self.transformer_layers, num_layers=num_layers)
 
     def forward(self, x):
-        x = x * math.sqrt(self.d_model) # TODO: Should we do this in every block?
         x = self.encoder(x, is_causal=False)
         return x
