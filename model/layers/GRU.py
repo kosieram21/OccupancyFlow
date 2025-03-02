@@ -7,5 +7,4 @@ class GRU(nn.Module):
 
 	def forward(self, x):
 		embedding, _ = self.gru(x)
-		#return embedding[:, -1, :]
-		return embedding[-1, :]
+		return embedding[:, -1, :] # TODO: max pooling?

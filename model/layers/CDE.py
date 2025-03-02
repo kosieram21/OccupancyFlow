@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torchdiffeq import odeint_adjoint
 from model.layers.Spline import NaturalCubicSpline
 

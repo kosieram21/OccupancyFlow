@@ -320,19 +320,28 @@ def collate_target_flow_field(data):
     # filter future_positions and future_velocities by future_states_valid
     # produce flow estimate tensor
 
-    return None
+    return torch.rand(224, 224, 3) # placeholder
 
 def collate_target_occupancy_grid(data):
     future_positions = np.stack((data['state/future/x'], data['state/future/y']), axis=-1)
     # TODO: collate ground truth occupancy grid
-    return None
+    return torch.rand(224, 224, 3) # placeholder
 
 def waymo_collate_fn(batch):
-    for data in batch:
-        # TODO: what do to if there is more then one datum in the batch?
-        road_map = collate_road_map(data)
-        agent_trajectories = collate_agent_trajectories(data)
-        target_flow_field = collate_target_flow_field(data)
-        target_occupancy_grid = collate_target_occupancy_grid(data)
+    road_maps = []
+    agent_trajectories = []
+    target_flow_fields = []
+    target_occupancy_grids = []
 
-    return road_map, agent_trajectories, target_flow_field, target_occupancy_grid
+    for data in batch:
+        road_maps.append(collate_road_map(data))
+        agent_trajectories.append(collate_agent_trajectories(data))
+        target_flow_fields.append(collate_target_flow_field(data))
+        target_occupancy_grids.append(collate_target_occupancy_grid(data))
+
+    road_map_batch = torch.stack(road_maps, dim=0)
+    agent_trajectories_batch = torch.stack(agent_trajectories, dim=0)
+    target_flow_field_batch = torch.stack(target_flow_fields, dim=0)
+    target_occupancy_grid_batch = torch.stack(target_occupancy_grids, dim=0)
+
+    return road_map_batch, agent_trajectories_batch, target_flow_field_batch, target_occupancy_grid_batch

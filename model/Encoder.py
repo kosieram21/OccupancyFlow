@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 from model.layers import CDE
 from model.layers import GRU
-from model.layers import Transformer
+from model.layers import SelfAttentionTransformer
 from model.layers import SwinTransformer
 
 # TODO: need to work on encoder model inputs
@@ -26,9 +26,9 @@ class Encoder(nn.Module):
         self.visual_encoder = SwinTransformer(img_size=road_map_image_size,
                                               embed_dim=96)
         
-        self.self_attention_transformer = Transformer(token_dim=token_dim,
-                                                      num_layers=4,
-                                                      num_heads=8)
+        self.self_attention_transformer = SelfAttentionTransformer(token_dim=token_dim,
+                                                                   num_layers=4,
+                                                                   num_heads=8)
         
         # TODO: What is the appropriate pooling module
         self.pooling_module = GRU(input_dim=token_dim,
@@ -43,15 +43,8 @@ class Encoder(nn.Module):
         agent_tokens = self.motion_encoder(t, agent_trajectories)
         print(agent_tokens.shape)
         print(road_map.shape)
-
-        # TODO: we should rework the model so that it is batched
-        if road_map.dim() == 3:
-            road_map = road_map.unsqueeze(0)
         environment_tokens = self.visual_encoder(road_map)
-        if environment_tokens.size(0) == 1:
-            environment_tokens = environment_tokens.squeeze(0)
         print(environment_tokens.shape)
-
         agent_tokens = self.self_attention_transformer(agent_tokens)
         # cross-attention (rasterized road map) transformer
         # self-attention transformer
