@@ -312,6 +312,21 @@ def rotate_points_around_origin(points, angle):
     ])
     return np.dot(points, rotation_matrix.T)
 
+def extract_lines(xy, id, typ):
+    line = [] # a list of points  
+    lines = [] # a list of lines
+    length = xy.shape[0]
+    for i, p in enumerate(xy):
+        line.append(p)
+        next_id = id[i+1] if i < length-1 else id[i]
+        current_id = id[i]
+        if next_id != current_id or i == length-1:
+            if typ in [18, 19]:
+                line.append(line[0])
+            lines.append(line)
+            line = []
+    return lines
+
 def collate_road_graph_points(data, pixels_per_meter, sdc_x_in_grid, sdc_y_in_grid, grid_size, padding):
     # get self-driving car (sdc) current position and yaw
     sdc_indices = np.where(data['state/is_sdc'] == 1)
@@ -350,14 +365,29 @@ def collate_road_map(data):
     GRID_SIZE = 224
     PADDING = 0
 
+    DPI = 1
+    IMG_SIZE = GRID_SIZE / DPI
+
     road_graph_points, point_mask = collate_road_graph_points(data, PIXELS_PER_METER, SDC_X_IN_GRID, SDC_Y_IN_GRID, GRID_SIZE, PADDING)
     road_graph_points = road_graph_points[point_mask]
     road_graph_dir = data['roadgraph_samples/dir'][point_mask]
     road_graph_type = data['roadgraph_samples/type'][point_mask]
+    road_graph_types = np.unique(road_graph_type)
     road_graph_id = data['roadgraph_samples/id'][point_mask]
+
+    road_label = {1:'LaneCenter-Freeway', 2:'LaneCenter-SurfaceStreet', 3:'LaneCenter-BikeLane', 6:'RoadLine-BrokenSingleWhite',
+                  7:'RoadLine-SolidSingleWhite', 8:'RoadLine-SolidDoubleWhite', 9:'RoadLine-BrokenSingleYellow', 10:'RoadLine-BrokenDoubleYellow', 
+                  11:'Roadline-SolidSingleYellow', 12:'Roadline-SolidDoubleYellow', 13:'RoadLine-PassingDoubleYellow', 15:'RoadEdgeBoundary', 
+                  16:'RoadEdgeMedian', 17:'StopSign', 18:'Crosswalk', 19:'SpeedBump'}
+
+    road_line_map = {1:['xkcd:grey', 'solid', 14], 2:['xkcd:grey', 'solid', 14], 3:['xkcd:grey', 'solid', 10], 6:['w', 'dashed', 2], 
+                     7:['w', 'solid', 2], 8:['w', 'solid', 2], 9:['xkcd:yellow', 'dashed', 4], 10:['xkcd:yellow', 'dashed', 2], 
+                     11:['xkcd:yellow', 'solid', 2], 12:['xkcd:yellow', 'solid', 3], 13:['xkcd:yellow', 'dotted', 1.5], 15:['y', 'solid', 4.5], 
+                     16:['y', 'solid', 4.5], 17:['r', '.', 40], 18:['b', 'solid', 13], 19:['xkcd:orange', 'solid', 13]}
 
     # TODO: delete me
     #print('road graph')
+    #print(f'  rg types: {road_graph_types}')
     #print(f'  point mask: {point_mask.shape}')
     #print(f'  points: {road_graph_points.shape}')
     #print(f'  dir: {road_graph_dir.shape}')
@@ -365,9 +395,6 @@ def collate_road_map(data):
     #print(f'  id: {road_graph_id.shape}')
 
     # TODO: build rasterized rgb image from road graph and traffic light states
-    DPI = 1
-    IMG_SIZE = GRID_SIZE / DPI
-
     fig, ax = plt.subplots()
     fig.set_size_inches([IMG_SIZE, IMG_SIZE])
     fig.set_dpi(DPI)
@@ -377,6 +404,31 @@ def collate_road_map(data):
     ax.grid(False)
     ax.margins(0)
     ax.axis('off')
+
+    # plot static roadmap
+    big=80
+    for t in road_graph_types:
+        road_points = road_graph_points[np.where(road_graph_type==t)[0]]
+        road_points = road_points[:, :2]
+        point_id = road_graph_id[np.where(road_graph_type==t)[0]]
+        if t in set([1, 2, 3]):
+            lines = extract_lines(road_points, point_id, t)
+            for line in lines:
+                ax.plot([point[0] for point in line], [point[1] for point in line], 
+                            color=road_line_map[t][0], linestyle=road_line_map[t][1], linewidth=road_line_map[t][2]*big, alpha=1, zorder=1)
+        elif t == 17: # plot stop signs
+            ax.plot(road_points.T[0, :], road_points.T[1, :], road_line_map[t][1], color=road_line_map[t][0], markersize=road_line_map[t][2]*big)
+        elif t in set([18, 19]): # plot crosswalk and speed bump
+            rects = extract_lines(road_points, point_id, t)
+            for rect in rects:
+                area = plt.fill([point[0] for point in rect], [point[1] for point in rect], color=road_line_map[t][0], alpha=0.7, zorder=2)
+        else: # plot other elements
+            lines = extract_lines(road_points, point_id, t)
+            for line in lines:
+                ax.plot([point[0] for point in line], [point[1] for point in line], 
+                        color=road_line_map[t][0], linestyle=road_line_map[t][1], linewidth=road_line_map[t][2]*big)
+                
+    fig.savefig("roadmap.png", bbox_inches='tight', dpi=DPI)
 
     road_map = torch.rand(224, 224, 3) # should be 256x256x3
     return road_map
