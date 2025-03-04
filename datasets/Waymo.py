@@ -1,5 +1,7 @@
 import os
 import glob
+import math
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from tfrecord.torch.dataset import MultiTFRecordDataset
@@ -248,6 +250,7 @@ def collate_agent_trajectories(data):
     #print(f" observed: {data['state/future/timestamp_micros'][0] / 1000000}")
     #print(f' theoretical: {[i / 10 for i in range(11, 91)]}')
 
+    # TODO: we should center all the points around the sdc for invarience... would we center velocity?
     past_states = np.stack((data['state/past/x'], data['state/past/y'], data['state/past/bbox_yaw'],
                             data['state/past/velocity_x'], data['state/past/velocity_y'], data['state/past/vel_yaw'],
                             data['state/past/width'], data['state/past/length'],
@@ -302,8 +305,79 @@ def collate_traffic_light_state(data):
 
     return torch.FloatTensor(traffic_light_states)
 
+def rotate_points_around_origin(points, angle):
+    rotation_matrix = np.array([
+        [np.cos(angle), -np.sin(angle)],
+        [np.sin(angle), np.cos(angle)]
+    ])
+    return np.dot(points, rotation_matrix.T)
+
+def collate_road_graph_points(data, pixels_per_meter, sdc_x_in_grid, sdc_y_in_grid, grid_size, padding):
+    # get self-driving car (sdc) current position and yaw
+    sdc_indices = np.where(data['state/is_sdc'] == 1)
+    sdc_xy = np.column_stack((data['state/current/x'][sdc_indices].flatten(),
+                              data['state/current/y'][sdc_indices].flatten()))
+    sdc_bbox_yaw = data['state/current/bbox_yaw'][sdc_indices].item()
+
+    # provide translational and rotatinal invarience (with respect to sdc)
+    centered_road_graph_points = data['roadgraph_samples/xyz'][:,:2] - sdc_xy
+    angle = math.pi / 2 - sdc_bbox_yaw
+    centered_and_rotated_road_graph_points = rotate_points_around_origin(centered_road_graph_points, angle)
+
+    # translate point to image coordinate system
+    scale = np.array([pixels_per_meter, -pixels_per_meter])
+    offset = np.array([sdc_x_in_grid, sdc_y_in_grid])
+    road_graph_image_points = np.round(centered_and_rotated_road_graph_points * scale) + offset
+
+    # mask points based on field of view (fov) and valid samples
+    fov_mask = np.logical_and.reduce([
+        road_graph_image_points[:, 0] >= -padding,
+        road_graph_image_points[:, 0] < grid_size + padding,
+        road_graph_image_points[:, 1] >= -padding,
+        road_graph_image_points[:, 1] < grid_size + padding
+    ])
+
+    is_valid_mask = data['roadgraph_samples/valid'] > 0.
+    point_mask = np.logical_and(fov_mask.reshape(-1, 1), is_valid_mask)
+
+    return road_graph_image_points, point_mask.flatten()
+
 def collate_road_map(data):
+    PIXELS_PER_METER = 3.2
+    SDC_X_IN_GRID = 112
+    SDC_Y_IN_GRID = 112
+
+    GRID_SIZE = 224
+    PADDING = 0
+
+    road_graph_points, point_mask = collate_road_graph_points(data, PIXELS_PER_METER, SDC_X_IN_GRID, SDC_Y_IN_GRID, GRID_SIZE, PADDING)
+    road_graph_points = road_graph_points[point_mask]
+    road_graph_dir = data['roadgraph_samples/dir'][point_mask]
+    road_graph_type = data['roadgraph_samples/type'][point_mask]
+    road_graph_id = data['roadgraph_samples/id'][point_mask]
+
+    # TODO: delete me
+    #print('road graph')
+    #print(f'  point mask: {point_mask.shape}')
+    #print(f'  points: {road_graph_points.shape}')
+    #print(f'  dir: {road_graph_dir.shape}')
+    #print(f'  type: {road_graph_type.shape}')
+    #print(f'  id: {road_graph_id.shape}')
+
     # TODO: build rasterized rgb image from road graph and traffic light states
+    DPI = 1
+    IMG_SIZE = GRID_SIZE / DPI
+
+    fig, ax = plt.subplots()
+    fig.set_size_inches([IMG_SIZE, IMG_SIZE])
+    fig.set_dpi(DPI)
+    fig.set_tight_layout(True)
+    fig.set_facecolor('k')
+    ax.set_facecolor('k')
+    ax.grid(False)
+    ax.margins(0)
+    ax.axis('off')
+
     road_map = torch.rand(224, 224, 3) # should be 256x256x3
     return road_map
 
