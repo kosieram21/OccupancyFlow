@@ -9,10 +9,10 @@ from subprocess import call
 from tqdm import tqdm
 
 PIXELS_PER_METER = 3.2
-SDC_X_IN_GRID = 512 #112
-SDC_Y_IN_GRID = 512 #112
+SDC_X_IN_GRID = 112 #512
+SDC_Y_IN_GRID = 112 #512
 
-GRID_SIZE = 1024 #224
+GRID_SIZE = 224 #1024
 PADDING = 0
 
 DPI = 1
@@ -265,6 +265,7 @@ def WaymoDataset(tfrecord_dir, idx_dir):
 
 def collate_agent_trajectories(data):
     # TODO: we should center all the points around the sdc for invarience... would we center velocity?
+    # TODO: we should probably also filter points that are not in the fov of the road_map
     past_states = np.stack((data['state/past/x'], data['state/past/y'], data['state/past/bbox_yaw'],
                             data['state/past/velocity_x'], data['state/past/velocity_y'], data['state/past/vel_yaw'],
                             data['state/past/width'], data['state/past/length'],
@@ -336,8 +337,6 @@ def collate_roadgraph(data):
     is_valid_mask = data['roadgraph_samples/valid'] > 0.
     point_mask = np.logical_and(fov_mask.reshape(-1, 1), is_valid_mask)
 
-    print(f'pm (rg): {point_mask.shape}')
-
     point_mask = point_mask.flatten()
     roadgraph_points = roadgraph_image_points[point_mask]
     roadgraph_type = data['roadgraph_samples/type'][point_mask]
@@ -353,8 +352,6 @@ def collate_traffic_light_state(data):
     fov_mask = get_fov_mask(traffic_light_impage_points)
     is_valid_mask = data['traffic_light_state/current/valid'][0] > 0.
     point_mask = np.logical_and(fov_mask, is_valid_mask)
-
-    print(f'pm (tl): {point_mask.shape}')
 
     traffic_light_impage_points = traffic_light_impage_points[point_mask]
     traffic_light_state = data['traffic_light_state/current/state'][0][point_mask]
@@ -414,16 +411,19 @@ def collate_road_map(data):
 
     # plot traffic lights
     for lp, ls in zip(traffic_light_points, traffic_light_state):
-        print('tl:')
-        print(f' lp: {lp}')
-        print(f' ls: {ls}')
         light_circle = plt.Circle(lp, 0.08*big, color=light_state_map[ls], zorder=2)
         ax.add_artist(light_circle)
 
-    fig.savefig("roadmap.png", bbox_inches='tight', dpi=DPI)
+    ax.axis([0,GRID_SIZE,0,GRID_SIZE])
+    ax.set_aspect('equal')
+    fig.canvas.draw()
+    road_map = np.array(fig.canvas.renderer.buffer_rgba())[:,:,:3]
 
-    road_map = torch.rand(224, 224, 3) # should be 256x256x3
-    return road_map
+    #fig.savefig("roadmap.png", bbox_inches='tight', dpi=DPI)
+
+    plt.close('all')
+
+    return torch.FloatTensor(road_map)
 
 def collate_target_flow_field(data):
     # TODO: collate ground truth flow field
