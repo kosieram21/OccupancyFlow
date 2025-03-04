@@ -8,6 +8,16 @@ from tfrecord.torch.dataset import MultiTFRecordDataset
 from subprocess import call
 from tqdm import tqdm
 
+PIXELS_PER_METER = 3.2
+SDC_X_IN_GRID = 512 #112
+SDC_Y_IN_GRID = 512 #112
+
+GRID_SIZE = 1024 #224
+PADDING = 0
+
+DPI = 1
+IMG_SIZE = GRID_SIZE / DPI
+
 roadgraph_features = {
     'roadgraph_samples/dir': 'float',
     'roadgraph_samples/id': 'int',
@@ -216,6 +226,21 @@ features_transforms.update(roadgraph_transforms)
 features_transforms.update(state_transforms)
 features_transforms.update(traffic_light_transforms)
 
+road_label = {1:'LaneCenter-Freeway', 2:'LaneCenter-SurfaceStreet', 3:'LaneCenter-BikeLane', 6:'RoadLine-BrokenSingleWhite',
+              7:'RoadLine-SolidSingleWhite', 8:'RoadLine-SolidDoubleWhite', 9:'RoadLine-BrokenSingleYellow', 10:'RoadLine-BrokenDoubleYellow', 
+              11:'Roadline-SolidSingleYellow', 12:'Roadline-SolidDoubleYellow', 13:'RoadLine-PassingDoubleYellow', 15:'RoadEdgeBoundary', 
+              16:'RoadEdgeMedian', 17:'StopSign', 18:'Crosswalk', 19:'SpeedBump'}
+
+road_line_map = {1:['xkcd:grey', 'solid', 14], 2:['xkcd:grey', 'solid', 14], 3:['xkcd:grey', 'solid', 10], 6:['w', 'dashed', 2], 
+                 7:['w', 'solid', 2], 8:['w', 'solid', 2], 9:['xkcd:yellow', 'dashed', 4], 10:['xkcd:yellow', 'dashed', 2], 
+                 11:['xkcd:yellow', 'solid', 2], 12:['xkcd:yellow', 'solid', 3], 13:['xkcd:yellow', 'dotted', 1.5], 15:['y', 'solid', 4.5], 
+                 16:['y', 'solid', 4.5], 17:['r', '.', 40], 18:['b', 'solid', 13], 19:['xkcd:orange', 'solid', 13]}
+
+light_label = {0:'Unknown', 1:'Arrow_Stop', 2:'Arrow_Caution', 3:'Arrow_Go', 4:'Stop', 
+               5:'Caution', 6:'Go', 7:'Flashing_Stop', 8:'Flashing_Caution'}
+
+light_state_map = {0:'k', 1:'r', 2:'y', 3:'g', 4:'r', 5:'y', 6:'g', 7:'r', 8:'y'}
+
 def transform(feature):
     transform = features_transforms
     keys = transform.keys()
@@ -239,17 +264,6 @@ def WaymoDataset(tfrecord_dir, idx_dir):
     return dataset
 
 def collate_agent_trajectories(data):
-    # TODO: delete these prints
-    #print('past times:')
-    #print(f" observed: {data['state/past/timestamp_micros'][0] / 1000000}")
-    #print(f' theoretical: {[i / 10 for i in range(10)]}')
-    #print('current time:')
-    #print(f" observed: {data['state/current/timestamp_micros'][0] / 1000000}")
-    #print(' theoretical: [1.0]')
-    #print('future times:')
-    #print(f" observed: {data['state/future/timestamp_micros'][0] / 1000000}")
-    #print(f' theoretical: {[i / 10 for i in range(11, 91)]}')
-
     # TODO: we should center all the points around the sdc for invarience... would we center velocity?
     past_states = np.stack((data['state/past/x'], data['state/past/y'], data['state/past/bbox_yaw'],
                             data['state/past/velocity_x'], data['state/past/velocity_y'], data['state/past/vel_yaw'],
@@ -273,44 +287,85 @@ def collate_agent_trajectories(data):
 
     return torch.FloatTensor(observed_states)
 
-# TODO: delete
-def collate_road_graph(data):
-    # [20000x6]
-    road_graph = np.concatenate((data['roadgraph_samples/id'], 
-                                 data['roadgraph_samples/type'], 
-                                 data['roadgraph_samples/xyz'][:,:2], 
-                                 data['roadgraph_samples/dir'][:,:2]), axis=-1)
-    # TODO: when would the road graph not be valid and what should we do for non-valid graph cells
-    road_graph_valid = data['roadgraph_samples/valid'] > 0.
-
-    return torch.FloatTensor(road_graph)
-
-# TODO: delete
-def collate_traffic_light_state(data):
-    # [16x11x3] (what is the 16? number of lights in total?)
-    # SceneTransformer transposed these... why? I think so the first dim is per light (if assumtion that 16 = max lights)
-    past_traffic_light_states = np.stack((data['traffic_light_state/past/state'].T,
-                                          data['traffic_light_state/past/x'].T,
-                                          data['traffic_light_state/past/y'].T), axis=-1)
-    past_traffic_light_states_valid = data['traffic_light_state/past/valid'].T > 0.
-    
-    current_traffic_light_states = np.stack((data['traffic_light_state/current/state'].T,
-                                             data['traffic_light_state/current/x'].T,
-                                             data['traffic_light_state/current/y'].T), axis=-1)
-    current_traffic_light_states_valid = data['traffic_light_state/current/valid'].T > 0.
-
-    traffic_light_states = np.concatenate((past_traffic_light_states, current_traffic_light_states), axis=1)
-    # TODO: when would the traffic light state not be valid and what should we do for non-valid states
-    traffic_light_states_valid = np.concatenate((past_traffic_light_states_valid, current_traffic_light_states_valid), axis=1)
-
-    return torch.FloatTensor(traffic_light_states)
-
 def rotate_points_around_origin(points, angle):
     rotation_matrix = np.array([
         [np.cos(angle), -np.sin(angle)],
         [np.sin(angle), np.cos(angle)]
     ])
     return np.dot(points, rotation_matrix.T)
+
+def normalize_about_sdc(points, data):
+    # get self-driving car (sdc) current position and yaw
+    sdc_indices = np.where(data['state/is_sdc'] == 1)
+    sdc_xy = np.column_stack((data['state/current/x'][sdc_indices].flatten(),
+                              data['state/current/y'][sdc_indices].flatten()))
+    sdc_bbox_yaw = data['state/current/bbox_yaw'][sdc_indices].item()
+
+    # provide translational and rotatinal invarience (with respect to sdc)
+    centered_points = points - sdc_xy
+    angle = math.pi / 2 - sdc_bbox_yaw
+    centered_and_rotated_points = rotate_points_around_origin(centered_points, angle)
+
+    return centered_and_rotated_points
+
+def get_image_coordinates(points, data):
+    centered_and_rotated_points = normalize_about_sdc(points, data)
+
+    # translate point to image coordinate system
+    scale = np.array([PIXELS_PER_METER, -PIXELS_PER_METER])
+    offset = np.array([SDC_X_IN_GRID, SDC_Y_IN_GRID])
+    image_points = np.round(centered_and_rotated_points * scale) + offset
+
+    return image_points
+
+def get_fov_mask(points):
+    fov_mask = np.logical_and.reduce([
+        points[:, 0] >= -PADDING,
+        points[:, 0] < GRID_SIZE + PADDING,
+        points[:, 1] >= -PADDING,
+        points[:, 1] < GRID_SIZE + PADDING
+    ])
+
+    return fov_mask
+
+def collate_roadgraph(data):
+    roadgraph_points = data['roadgraph_samples/xyz'][:,:2]
+    roadgraph_image_points = get_image_coordinates(roadgraph_points, data)
+
+    fov_mask = get_fov_mask(roadgraph_image_points)
+    is_valid_mask = data['roadgraph_samples/valid'] > 0.
+    point_mask = np.logical_and(fov_mask.reshape(-1, 1), is_valid_mask)
+
+    print(f'pm (rg): {point_mask.shape}')
+
+    point_mask = point_mask.flatten()
+    roadgraph_points = roadgraph_image_points[point_mask]
+    roadgraph_type = data['roadgraph_samples/type'][point_mask]
+    roadgraph_types = np.unique(roadgraph_type)
+    roadgraph_id = data['roadgraph_samples/id'][point_mask]
+
+    return roadgraph_points, roadgraph_type, roadgraph_types, roadgraph_id
+
+def collate_traffic_light_state(data):
+    traffic_light_x = data['traffic_light_state/current/x'][0]
+    traffic_light_y = data['traffic_light_state/current/y'][0]
+    print(f'tl points: {traffic_light_x.shape}')
+    traffic_light_points = np.stack((data['traffic_light_state/current/x'][0], data['traffic_light_state/current/y'][0]), axis=-1)
+    traffic_light_impage_points = get_image_coordinates(traffic_light_points, data)
+
+    fov_mask = get_fov_mask(traffic_light_impage_points)
+    is_valid_mask = data['traffic_light_state/current/valid'][0] > 0.
+    point_mask = np.logical_and(fov_mask.reshape(-1, 1), is_valid_mask)
+
+    print(f'pm (tl): {point_mask.shape}')
+
+    traffic_light_state = data['traffic_light_state/current/state'][0]
+    traffic_light_valid = data['traffic_light_state/current/valid'][0] > 0.
+    
+    traffic_light_x = traffic_light_x[traffic_light_valid]
+    traffic_light_y = traffic_light_y[traffic_light_valid]
+    traffic_light_state = traffic_light_state[traffic_light_valid]
+    return traffic_light_x, traffic_light_y, traffic_light_state
 
 def extract_lines(xy, id, typ):
     line = [] # a list of points  
@@ -327,80 +382,10 @@ def extract_lines(xy, id, typ):
             line = []
     return lines
 
-def collate_road_graph_points(data, pixels_per_meter, sdc_x_in_grid, sdc_y_in_grid, grid_size, padding):
-    # get self-driving car (sdc) current position and yaw
-    sdc_indices = np.where(data['state/is_sdc'] == 1)
-    sdc_xy = np.column_stack((data['state/current/x'][sdc_indices].flatten(),
-                              data['state/current/y'][sdc_indices].flatten()))
-    sdc_bbox_yaw = data['state/current/bbox_yaw'][sdc_indices].item()
-
-    # provide translational and rotatinal invarience (with respect to sdc)
-    centered_road_graph_points = data['roadgraph_samples/xyz'][:,:2] - sdc_xy
-    angle = math.pi / 2 - sdc_bbox_yaw
-    centered_and_rotated_road_graph_points = rotate_points_around_origin(centered_road_graph_points, angle)
-
-    # translate point to image coordinate system
-    scale = np.array([pixels_per_meter, -pixels_per_meter])
-    offset = np.array([sdc_x_in_grid, sdc_y_in_grid])
-    road_graph_image_points = np.round(centered_and_rotated_road_graph_points * scale) + offset
-
-    # mask points based on field of view (fov) and valid samples
-    fov_mask = np.logical_and.reduce([
-        road_graph_image_points[:, 0] >= -padding,
-        road_graph_image_points[:, 0] < grid_size + padding,
-        road_graph_image_points[:, 1] >= -padding,
-        road_graph_image_points[:, 1] < grid_size + padding
-    ])
-
-    is_valid_mask = data['roadgraph_samples/valid'] > 0.
-    point_mask = np.logical_and(fov_mask.reshape(-1, 1), is_valid_mask)
-
-    print(f'is valid: {np.sum(is_valid_mask)}')
-    print(f'point mask: {np.sum(point_mask)}')
-
-    return road_graph_image_points, point_mask.flatten()
-
 def collate_road_map(data):
-    PIXELS_PER_METER = 3.2
-    #SDC_X_IN_GRID = 112
-    #SDC_Y_IN_GRID = 112
-    SDC_X_IN_GRID = 512
-    SDC_Y_IN_GRID = 512
+    roadgraph_points, roadgraph_type, roadgraph_types, roadgraph_id = collate_roadgraph(data)
+    traffic_light_x, traffic_light_y, traffic_light_state = collate_traffic_light_state(data)
 
-    #GRID_SIZE = 224
-    GRID_SIZE = 1024
-    PADDING = 0
-
-    DPI = 1
-    IMG_SIZE = GRID_SIZE / DPI
-
-    road_graph_points, point_mask = collate_road_graph_points(data, PIXELS_PER_METER, SDC_X_IN_GRID, SDC_Y_IN_GRID, GRID_SIZE, PADDING)
-    road_graph_points = road_graph_points[point_mask]
-    road_graph_dir = data['roadgraph_samples/dir'][point_mask]
-    road_graph_type = data['roadgraph_samples/type'][point_mask]
-    road_graph_types = np.unique(road_graph_type)
-    road_graph_id = data['roadgraph_samples/id'][point_mask]
-
-    road_label = {1:'LaneCenter-Freeway', 2:'LaneCenter-SurfaceStreet', 3:'LaneCenter-BikeLane', 6:'RoadLine-BrokenSingleWhite',
-                  7:'RoadLine-SolidSingleWhite', 8:'RoadLine-SolidDoubleWhite', 9:'RoadLine-BrokenSingleYellow', 10:'RoadLine-BrokenDoubleYellow', 
-                  11:'Roadline-SolidSingleYellow', 12:'Roadline-SolidDoubleYellow', 13:'RoadLine-PassingDoubleYellow', 15:'RoadEdgeBoundary', 
-                  16:'RoadEdgeMedian', 17:'StopSign', 18:'Crosswalk', 19:'SpeedBump'}
-
-    road_line_map = {1:['xkcd:grey', 'solid', 14], 2:['xkcd:grey', 'solid', 14], 3:['xkcd:grey', 'solid', 10], 6:['w', 'dashed', 2], 
-                     7:['w', 'solid', 2], 8:['w', 'solid', 2], 9:['xkcd:yellow', 'dashed', 4], 10:['xkcd:yellow', 'dashed', 2], 
-                     11:['xkcd:yellow', 'solid', 2], 12:['xkcd:yellow', 'solid', 3], 13:['xkcd:yellow', 'dotted', 1.5], 15:['y', 'solid', 4.5], 
-                     16:['y', 'solid', 4.5], 17:['r', '.', 40], 18:['b', 'solid', 13], 19:['xkcd:orange', 'solid', 13]}
-
-    # TODO: delete me
-    #print('road graph')
-    #print(f'  rg types: {road_graph_types}')
-    #print(f'  point mask: {point_mask.shape}')
-    #print(f'  points: {road_graph_points.shape}')
-    #print(f'  dir: {road_graph_dir.shape}')
-    #print(f'  type: {road_graph_type.shape}')
-    #print(f'  id: {road_graph_id.shape}')
-
-    # TODO: build rasterized rgb image from road graph and traffic light states
     fig, ax = plt.subplots()
     fig.set_size_inches([IMG_SIZE, IMG_SIZE])
     fig.set_dpi(DPI)
@@ -413,15 +398,14 @@ def collate_road_map(data):
 
     # plot static roadmap
     big=80
-    for t in road_graph_types:
-        road_points = road_graph_points[np.where(road_graph_type==t)[0]]
-        road_points = road_points[:, :2]
-        point_id = road_graph_id[np.where(road_graph_type==t)[0]]
+    for t in roadgraph_types:
+        road_points = roadgraph_points[np.where(roadgraph_type==t)[0]]
+        point_id = roadgraph_id[np.where(roadgraph_type==t)[0]]
         if t in set([1, 2, 3]):
             lines = extract_lines(road_points, point_id, t)
             for line in lines:
                 ax.plot([point[0] for point in line], [point[1] for point in line], 
-                            color=road_line_map[t][0], linestyle=road_line_map[t][1], linewidth=road_line_map[t][2]*big, alpha=1, zorder=1)
+                        color=road_line_map[t][0], linestyle=road_line_map[t][1], linewidth=road_line_map[t][2]*big, alpha=1, zorder=1)
         elif t == 17: # plot stop signs
             ax.plot(road_points.T[0, :], road_points.T[1, :], road_line_map[t][1], color=road_line_map[t][0], markersize=road_line_map[t][2]*big)
         elif t in set([18, 19]): # plot crosswalk and speed bump
@@ -433,7 +417,16 @@ def collate_road_map(data):
             for line in lines:
                 ax.plot([point[0] for point in line], [point[1] for point in line], 
                         color=road_line_map[t][0], linestyle=road_line_map[t][1], linewidth=road_line_map[t][2]*big)
-                
+
+    # plot traffic lights
+    for lx, ly, ls in zip(traffic_light_x, traffic_light_y, traffic_light_state):
+        print('tl circle')
+        print(lx)
+        print(ly)
+        print(ls)
+        light_circle = plt.Circle((lx, ly), 1.5*big, color=light_state_map[ls], zorder=2)
+        ax.add_artist(light_circle)
+
     fig.savefig("roadmap.png", bbox_inches='tight', dpi=DPI)
 
     road_map = torch.rand(224, 224, 3) # should be 256x256x3
