@@ -8,12 +8,12 @@ from model.layers import CrossAttentionTransformer
 from model.layers import SwinTransformer
 
 # TODO: need to work on encoder model inputs
-class Encoder(nn.Module):
+class SceneEncoder(nn.Module):
     def __init__(self, 
                  road_map_image_size, trajectory_feature_dim, 
                  motion_encoder_hidden_dim, motion_encoder_seq_len,
                  token_dim, embedding_dim):
-        super(Encoder, self).__init__()
+        super(SceneEncoder, self).__init__()
 
         assert embedding_dim % 2 == 0, "embedding_dim must be divisible by 2 for bidirectional GRU"
 

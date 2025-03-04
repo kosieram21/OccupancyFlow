@@ -5,57 +5,43 @@ from torchdiffeq import odeint_adjoint
 from model.layers.SquashLinear import ConcatSquashLinear
 	
 class ODEFunc(nn.Module):
-	def __init__(self, input_dim, condition_dim, hidden_dims, marginal):
+	def __init__(self, input_dim, condition_dim, hidden_dims):
 		super(ODEFunc, self).__init__()
 
-		self.marginal = marginal
-		self.sampling_frequency = 1
-		self.epsilon = None
-
-		temporal_context_dim = 2 if marginal else 1
 		dim_list = [input_dim] + list(hidden_dims) + [input_dim]
-		
 		layers = []
 		for i in range(len(dim_list) - 1):
-			layers.append(ConcatSquashLinear(dim_list[i], dim_list[i + 1], condition_dim + temporal_context_dim))
+			layers.append(ConcatSquashLinear(dim_list[i], dim_list[i + 1], condition_dim + 1))
 		self.layers = nn.ModuleList(layers)
 
-	def _z_dot(self, t, z, condition):		
-		if self.marginal:
-			condition = condition.unsqueeze(1).expand(-1, z.shape[1], -1)
-			time_encoding = t.expand(z.shape[0], z.shape[1], 1)
-			positional_encoding = torch.cumsum(torch.ones_like(z)[:, :, 0], 1).unsqueeze(-1)
-			positional_encoding = positional_encoding / self.sampling_frequency
-			context = torch.cat([positional_encoding, time_encoding, condition], dim=-1)
-		else:
-			time_encoding = t.expand(z.shape[0], 1)
-			context = torch.cat([time_encoding, condition], dim=-1)
+	def _h_dot(self, t, h, scene_context):		
+		time_context = t.expand(h.shape[0], 1)
+		context = torch.cat([time_context, scene_context], dim=-1)
 
-		z_dot = z
+		h_dot = h
 		for l, layer in enumerate(self.layers):
-			z_dot = layer(context, z_dot)
+			h_dot = layer(context, h_dot)
 			if l < len(self.layers) - 1:
-				z_dot = F.tanh(z_dot)
-		return z_dot
+				h_dot = F.tanh(h_dot)
+		return h_dot
 	
 	def forward(self, t, states):
-		z = states[0]
-		condition = states[2]
-
-		with torch.set_grad_enabled(True):
-			t.requires_grad_(True)
-			for state in states:
-				state.requires_grad_(True)
-			z_dot = self._z_dot(t, z, condition)
-			divergence = self._jacobian_trace(z_dot, z)
-
-		return z_dot, -divergence, torch.zeros_like(condition).requires_grad_(True)
+		h = states[0]
+		scene_context = states[1]
+		h_dot = self._h_dot(t, h, scene_context)
+		return h_dot, torch.zeros_like(scene_context).requires_grad_(True)
 	
 class ODE(nn.Module):
-	def __init__(self):
-		# implement the constructor
-		self.t = 0
+	def __init__(self, input_dim, condition_dim, hidden_dims):
+		super(ODE, self).__init__()
+
+		self.vector_field = ODEFunc(input_dim, condition_dim, hidden_dims)
 		
-	def forward(self):
-		# implement forward with ode_int
+	def forward(self, t, h, scene_context):
+		states = (h, scene_context)
+		flow = self.vector_field(t, states)
+		return flow
+	
+	def solve_ivp(self, initial_value, scene_context):
+		# TODO: implement warp occupancy as an initial value problem (IVP)
 		return None

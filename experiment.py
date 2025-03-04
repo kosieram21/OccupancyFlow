@@ -1,6 +1,6 @@
 from torch.utils.data import DataLoader
 from datasets.Waymo import WaymoDataset, waymo_collate_fn, create_idx
-from model import Encoder
+from model import SceneEncoder
 
 should_index = False
 
@@ -13,7 +13,7 @@ if should_index:
 dataset = WaymoDataset(tfrecord_path, idx_path)
 dataloader = DataLoader(dataset, batch_size=1, collate_fn=lambda x: waymo_collate_fn(x))
 
-encoder = Encoder(road_map_image_size=224, trajectory_feature_dim=9, 
+encoder = SceneEncoder(road_map_image_size=224, trajectory_feature_dim=9, 
                   motion_encoder_hidden_dim=512, motion_encoder_seq_len=11,
                   token_dim=768, embedding_dim=2048)
                   #token_dim=128, embedding_dim=1024)
