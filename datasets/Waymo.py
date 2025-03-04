@@ -347,25 +347,19 @@ def collate_roadgraph(data):
     return roadgraph_points, roadgraph_type, roadgraph_types, roadgraph_id
 
 def collate_traffic_light_state(data):
-    traffic_light_x = data['traffic_light_state/current/x'][0]
-    traffic_light_y = data['traffic_light_state/current/y'][0]
-    print(f'tl points: {traffic_light_x.shape}')
     traffic_light_points = np.stack((data['traffic_light_state/current/x'][0], data['traffic_light_state/current/y'][0]), axis=-1)
     traffic_light_impage_points = get_image_coordinates(traffic_light_points, data)
 
     fov_mask = get_fov_mask(traffic_light_impage_points)
     is_valid_mask = data['traffic_light_state/current/valid'][0] > 0.
-    point_mask = np.logical_and(fov_mask.reshape(-1, 1), is_valid_mask)
+    point_mask = np.logical_and(fov_mask, is_valid_mask)
 
     print(f'pm (tl): {point_mask.shape}')
 
-    traffic_light_state = data['traffic_light_state/current/state'][0]
-    traffic_light_valid = data['traffic_light_state/current/valid'][0] > 0.
-    
-    traffic_light_x = traffic_light_x[traffic_light_valid]
-    traffic_light_y = traffic_light_y[traffic_light_valid]
-    traffic_light_state = traffic_light_state[traffic_light_valid]
-    return traffic_light_x, traffic_light_y, traffic_light_state
+    traffic_light_impage_points = traffic_light_impage_points[point_mask]
+    traffic_light_state = data['traffic_light_state/current/state'][0][point_mask]
+
+    return traffic_light_impage_points, traffic_light_state
 
 def extract_lines(xy, id, typ):
     line = [] # a list of points  
@@ -384,7 +378,7 @@ def extract_lines(xy, id, typ):
 
 def collate_road_map(data):
     roadgraph_points, roadgraph_type, roadgraph_types, roadgraph_id = collate_roadgraph(data)
-    traffic_light_x, traffic_light_y, traffic_light_state = collate_traffic_light_state(data)
+    traffic_light_points, traffic_light_state = collate_traffic_light_state(data)
 
     fig, ax = plt.subplots()
     fig.set_size_inches([IMG_SIZE, IMG_SIZE])
@@ -419,12 +413,11 @@ def collate_road_map(data):
                         color=road_line_map[t][0], linestyle=road_line_map[t][1], linewidth=road_line_map[t][2]*big)
 
     # plot traffic lights
-    for lx, ly, ls in zip(traffic_light_x, traffic_light_y, traffic_light_state):
-        print('tl circle')
-        print(lx)
-        print(ly)
-        print(ls)
-        light_circle = plt.Circle((lx, ly), 1.5*big, color=light_state_map[ls], zorder=2)
+    for lp, ls in zip(traffic_light_points, traffic_light_state):
+        print('tl:')
+        print(f' lp: {lp}')
+        print(f' ls: {ls}')
+        light_circle = plt.Circle(lp, 0.08*big, color=light_state_map[ls], zorder=2)
         ax.add_artist(light_circle)
 
     fig.savefig("roadmap.png", bbox_inches='tight', dpi=DPI)
