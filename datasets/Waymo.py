@@ -355,14 +355,20 @@ def collate_road_graph_points(data, pixels_per_meter, sdc_x_in_grid, sdc_y_in_gr
     is_valid_mask = data['roadgraph_samples/valid'] > 0.
     point_mask = np.logical_and(fov_mask.reshape(-1, 1), is_valid_mask)
 
+    print(f'is valid: {np.sum(is_valid_mask)}')
+    print(f'point mask: {np.sum(point_mask)}')
+
     return road_graph_image_points, point_mask.flatten()
 
 def collate_road_map(data):
     PIXELS_PER_METER = 3.2
-    SDC_X_IN_GRID = 112
-    SDC_Y_IN_GRID = 112
+    #SDC_X_IN_GRID = 112
+    #SDC_Y_IN_GRID = 112
+    SDC_X_IN_GRID = 512
+    SDC_Y_IN_GRID = 512
 
-    GRID_SIZE = 224
+    #GRID_SIZE = 224
+    GRID_SIZE = 1024
     PADDING = 0
 
     DPI = 1
