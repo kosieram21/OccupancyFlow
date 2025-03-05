@@ -263,31 +263,6 @@ def WaymoDataset(tfrecord_dir, idx_dir):
     dataset = MultiTFRecordDataset(tfrecord_pattern, index_pattern, splits, description=features_description, transform=transform, infinite=False)
     return dataset
 
-def collate_agent_trajectories(data):
-    # TODO: we should center all the points around the sdc for invarience... would we center velocity?
-    # TODO: we should probably also filter points that are not in the fov of the road_map
-    past_states = np.stack((data['state/past/x'], data['state/past/y'], data['state/past/bbox_yaw'],
-                            data['state/past/velocity_x'], data['state/past/velocity_y'], data['state/past/vel_yaw'],
-                            data['state/past/width'], data['state/past/length'],
-                            data['state/past/timestamp_micros']), axis=-1)
-    past_states_valid = data['state/past/valid'] > 0.
-
-    current_states = np.stack((data['state/current/x'], data['state/current/y'], data['state/current/bbox_yaw'],
-                               data['state/current/velocity_x'], data['state/current/velocity_y'], data['state/current/vel_yaw'],
-                               data['state/current/width'], data['state/current/length'],
-                               data['state/current/timestamp_micros']), axis=-1)
-    current_states_valid = data['state/current/valid'] > 0.
-
-    observed_states = np.concatenate((past_states, current_states), axis=1)
-    observed_states_valid = np.concatenate((past_states_valid, current_states_valid), axis=1)
-
-    any_observed_states_valid_mask = np.sum(observed_states_valid, axis=1) > 0
-    observed_states = observed_states[any_observed_states_valid_mask]
-    observed_states_valid = observed_states_valid[any_observed_states_valid_mask]
-    observed_states = np.where(observed_states_valid[..., None], observed_states, np.nan)
-
-    return torch.FloatTensor(observed_states)
-
 def rotate_points_around_origin(points, angle):
     rotation_matrix = np.array([
         [np.cos(angle), -np.sin(angle)],
@@ -318,29 +293,21 @@ def denormalize_from_sdc(centered_and_rotated_points, data):
 
     # Reverse the rotation and translation
     angle = -(math.pi / 2 - sdc_bbox_yaw)
-    rotated_points = rotate_points_around_origin(centered_and_rotated_points, angle)
-    world_points = rotated_points + sdc_xy
+    centered_points = rotate_points_around_origin(centered_and_rotated_points, angle)
+    points = centered_points + sdc_xy
     
-    return world_points
+    return points
 
-def get_image_coordinates(points, data):
-    centered_and_rotated_points = normalize_about_sdc(points, data)
-
-    # translate point to image coordinate system
+def get_image_coordinates(world_points):
     scale = np.array([PIXELS_PER_METER, -PIXELS_PER_METER])
     offset = np.array([SDC_X_IN_GRID, SDC_Y_IN_GRID])
-    image_points = np.round(centered_and_rotated_points * scale) + offset
-
+    image_points = np.round(world_points * scale) + offset
     return image_points
 
-def get_world_coordinates(image_points, data):
-    # Get the offset from image coordinate system
+def get_world_coordinates(image_points):
     offset = np.array([SDC_X_IN_GRID, SDC_Y_IN_GRID])
     scale = np.array([PIXELS_PER_METER, -PIXELS_PER_METER])
-    centered_and_rotated_points = (image_points - offset) / scale
-    
-    world_points = denormalize_from_sdc(centered_and_rotated_points, data)
-    
+    world_points = (image_points - offset) / scale
     return world_points
 
 def get_fov_mask(points):
@@ -353,9 +320,49 @@ def get_fov_mask(points):
 
     return fov_mask
 
+def collate_agent_trajectories(data):
+    past_positions = np.stack((data['state/past/x'], data['state/past/y']), axis=-1)
+    current_position = np.stack((data['state/current/x'], data['state/current/y']), axis=-1)
+    observed_positions = np.concatenate((past_positions, current_position), axis=1)
+
+    max_agents, timesteps, xy = observed_positions.shape
+    observed_positions = observed_positions.reshape(-1, xy)
+    
+    centered_and_rotated_observed_positions = normalize_about_sdc(observed_positions, data)
+    centered_and_rotated_image_observed_positions = get_image_coordinates(centered_and_rotated_observed_positions)
+    fov_mask = get_fov_mask(centered_and_rotated_image_observed_positions)
+
+    observed_positions = centered_and_rotated_observed_positions.reshape(max_agents, timesteps, xy)
+    fov_mask = fov_mask.reshape(max_agents, timesteps)
+
+    past_states = np.stack((data['state/past/bbox_yaw'],
+                            data['state/past/velocity_x'], data['state/past/velocity_y'], data['state/past/vel_yaw'],
+                            data['state/past/width'], data['state/past/length'],
+                            data['state/past/timestamp_micros']), axis=-1)
+    past_states_valid = data['state/past/valid'] > 0.
+
+    current_states = np.stack((data['state/current/bbox_yaw'],
+                               data['state/current/velocity_x'], data['state/current/velocity_y'], data['state/current/vel_yaw'],
+                               data['state/current/width'], data['state/current/length'],
+                               data['state/current/timestamp_micros']), axis=-1)
+    current_states_valid = data['state/current/valid'] > 0.
+
+    observed_states = np.concatenate((past_states, current_states), axis=1)
+    observed_states = np.concatenate((observed_positions, observed_states), axis=-1)
+    is_valid_mask = np.concatenate((past_states_valid, current_states_valid), axis=1)
+    point_mask = np.logical_and(fov_mask, is_valid_mask)
+
+    any_observed_states_valid_mask = np.sum(point_mask, axis=1) > 0
+    observed_states = observed_states[any_observed_states_valid_mask]
+    point_mask = point_mask[any_observed_states_valid_mask]
+    observed_states = np.where(point_mask[..., None], observed_states, np.nan)
+
+    return torch.FloatTensor(observed_states)
+
 def collate_roadgraph(data):
     roadgraph_points = data['roadgraph_samples/xyz'][:,:2]
-    roadgraph_image_points = get_image_coordinates(roadgraph_points, data)
+    centered_and_rotated_roadgraph_points = normalize_about_sdc(roadgraph_points, data)
+    roadgraph_image_points = get_image_coordinates(centered_and_rotated_roadgraph_points)
 
     fov_mask = get_fov_mask(roadgraph_image_points)
     is_valid_mask = data['roadgraph_samples/valid'] > 0.
@@ -371,16 +378,17 @@ def collate_roadgraph(data):
 
 def collate_traffic_light_state(data):
     traffic_light_points = np.stack((data['traffic_light_state/current/x'][0], data['traffic_light_state/current/y'][0]), axis=-1)
-    traffic_light_impage_points = get_image_coordinates(traffic_light_points, data)
+    centered_and_rotated_traffic_light_points = normalize_about_sdc(traffic_light_points, data)
+    traffic_light_image_points = get_image_coordinates(centered_and_rotated_traffic_light_points)
 
-    fov_mask = get_fov_mask(traffic_light_impage_points)
+    fov_mask = get_fov_mask(traffic_light_image_points)
     is_valid_mask = data['traffic_light_state/current/valid'][0] > 0.
     point_mask = np.logical_and(fov_mask, is_valid_mask)
 
-    traffic_light_impage_points = traffic_light_impage_points[point_mask]
+    traffic_light_image_points = traffic_light_image_points[point_mask]
     traffic_light_state = data['traffic_light_state/current/state'][0][point_mask]
 
-    return traffic_light_impage_points, traffic_light_state
+    return traffic_light_image_points, traffic_light_state
 
 def extract_lines(xy, id, typ):
     points = [] 
@@ -478,7 +486,7 @@ def waymo_collate_fn(batch):
 
     for data in batch:
         # TODO: if we want to batch we need to be able to handle variable sized tensors
-        road_maps.append(rasterize_road_map(data))
+        road_maps.append(rasterize_road_map(data, save_img=True))
         agent_trajectories.append(collate_agent_trajectories(data))
         target_flow_fields.append(collate_target_flow_field(data))
         target_occupancy_grids.append(collate_target_occupancy_grid(data))
