@@ -350,7 +350,14 @@ def collate_agent_trajectories(data):
     observed_states = np.concatenate((past_states, current_states), axis=1)
     observed_states = np.concatenate((observed_positions, observed_states), axis=-1)
     is_valid_mask = np.concatenate((past_states_valid, current_states_valid), axis=1)
-    point_mask = np.logical_and(fov_mask, is_valid_mask)
+    point_mask = np.logical_and(fov_mask, is_valid_mask) # is_valid_mask
+
+    # TODO: delete me! test to see how many trajectories are outside the fov
+    nf_any_valid_mask = np.sum(is_valid_mask, axis=1) > 0
+    nf_observed_states = observed_states[nf_any_valid_mask]
+    nf_point_mask = is_valid_mask[nf_any_valid_mask]
+    nf_observed_states = np.where(nf_point_mask[..., None], nf_observed_states, np.nan)
+    print(f'nf shape: {nf_observed_states.shape}')
 
     any_observed_states_valid_mask = np.sum(point_mask, axis=1) > 0
     observed_states = observed_states[any_observed_states_valid_mask]
