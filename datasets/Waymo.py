@@ -467,6 +467,28 @@ def rasterize_road_map(data, save_img=False):
 
 def collate_target_flow_field(data):
     # TODO: collate ground truth flow field
+    unobserved_positions = np.stack((data['state/future/x'], data['state/future/y']), axis=-1)
+
+    max_agents, timesteps, xy = unobserved_positions.shape
+    unobserved_positions = unobserved_positions.reshape(-1, xy)
+    
+    centered_and_rotated_unobserved_positions = normalize_about_sdc(unobserved_positions, data)
+    centered_and_rotated_image_unobserved_positions = get_image_coordinates(centered_and_rotated_unobserved_positions)
+    fov_mask = get_fov_mask(centered_and_rotated_image_unobserved_positions)
+
+    unobserved_positions = centered_and_rotated_unobserved_positions.reshape(max_agents, timesteps, xy)
+    fov_mask = fov_mask.reshape(max_agents, timesteps)
+
+    future_times = data['state/future/timestamp_micros']
+    future_velocity = np.stack((data['state/future/velocity_x'], data['state/future/velocity_y']), axis=-1)
+
+    is_valid_mask = data['state/future/valid'] > 0.
+    point_mask = np.logical_and(fov_mask, is_valid_mask)
+
+    # TODO: flatten agent and timestep dim and filter based on the point mask
+
+    return torch.FloatTensor(unobserved_positions), torch.FloatTensor(future_times), torch.FloatTensor(future_velocity)
+
     future_positions = np.stack((data['state/future/x'], data['state/future/y']), axis=-1)
     future_velocities = np.stack((data['state/future/velocity_x'], data['state/future/velocity_y']), axis=-1)
     future_states_valid = data['state/future/valid'] > 0.
@@ -488,19 +510,26 @@ def collate_target_occupancy_grid(data):
 def waymo_collate_fn(batch):
     road_maps = []
     agent_trajectories = []
-    target_flow_fields = []
+    unobserved_positions = []
+    future_times = []
+    future_velocities = []
     target_occupancy_grids = []
 
     for data in batch:
         # TODO: if we want to batch we need to be able to handle variable sized tensors
         road_maps.append(rasterize_road_map(data, save_img=True))
         agent_trajectories.append(collate_agent_trajectories(data))
-        target_flow_fields.append(collate_target_flow_field(data))
+        pos, t, vel = collate_target_flow_field(data)
+        unobserved_positions.append(pos)
+        future_times.append(t)
+        future_velocities.append(vel)
         target_occupancy_grids.append(collate_target_occupancy_grid(data))
 
     road_map_batch = torch.stack(road_maps, dim=0)
     agent_trajectories_batch = torch.stack(agent_trajectories, dim=0)
-    target_flow_field_batch = torch.stack(target_flow_fields, dim=0)
+    unobserved_positions_batch = torch.stack(unobserved_positions, dim=0)
+    future_times_batch = torch.stack(future_times, dim=0)
+    future_velocities_batch = torch.stack(future_velocities, dim=0)
     target_occupancy_grid_batch = torch.stack(target_occupancy_grids, dim=0)
 
-    return road_map_batch, agent_trajectories_batch, target_flow_field_batch, target_occupancy_grid_batch
+    return road_map_batch, agent_trajectories_batch, unobserved_positions_batch, future_times_batch, future_velocities_batch, target_occupancy_grid_batch
