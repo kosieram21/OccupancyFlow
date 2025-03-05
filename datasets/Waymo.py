@@ -309,6 +309,20 @@ def normalize_about_sdc(points, data):
 
     return centered_and_rotated_points
 
+def denormalize_from_sdc(centered_and_rotated_points, data):
+    # get self-driving car (sdc) current position and yaw
+    sdc_indices = np.where(data['state/is_sdc'] == 1)
+    sdc_xy = np.column_stack((data['state/current/x'][sdc_indices].flatten(),
+                              data['state/current/y'][sdc_indices].flatten()))
+    sdc_bbox_yaw = data['state/current/bbox_yaw'][sdc_indices].item()
+
+    # Reverse the rotation and translation
+    angle = -(math.pi / 2 - sdc_bbox_yaw)
+    rotated_points = rotate_points_around_origin(centered_and_rotated_points, angle)
+    world_points = rotated_points + sdc_xy
+    
+    return world_points
+
 def get_image_coordinates(points, data):
     centered_and_rotated_points = normalize_about_sdc(points, data)
 
@@ -318,6 +332,16 @@ def get_image_coordinates(points, data):
     image_points = np.round(centered_and_rotated_points * scale) + offset
 
     return image_points
+
+def get_world_coordinates(image_points, data):
+    # Get the offset from image coordinate system
+    offset = np.array([SDC_X_IN_GRID, SDC_Y_IN_GRID])
+    scale = np.array([PIXELS_PER_METER, -PIXELS_PER_METER])
+    centered_and_rotated_points = (image_points - offset) / scale
+    
+    world_points = denormalize_from_sdc(centered_and_rotated_points, data)
+    
+    return world_points
 
 def get_fov_mask(points):
     fov_mask = np.logical_and.reduce([
@@ -453,6 +477,7 @@ def waymo_collate_fn(batch):
     target_occupancy_grids = []
 
     for data in batch:
+        # TODO: if we want to batch we need to be able to handle variable sized tensors
         road_maps.append(rasterize_road_map(data))
         agent_trajectories.append(collate_agent_trajectories(data))
         target_flow_fields.append(collate_target_flow_field(data))
