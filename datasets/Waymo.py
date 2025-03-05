@@ -352,13 +352,6 @@ def collate_agent_trajectories(data):
     is_valid_mask = np.concatenate((past_states_valid, current_states_valid), axis=1)
     point_mask = np.logical_and(fov_mask, is_valid_mask) # is_valid_mask
 
-    # TODO: delete me! test to see how many trajectories are outside the fov
-    nf_any_valid_mask = np.sum(is_valid_mask, axis=1) > 0
-    nf_observed_states = observed_states[nf_any_valid_mask]
-    nf_point_mask = is_valid_mask[nf_any_valid_mask]
-    nf_observed_states = np.where(nf_point_mask[..., None], nf_observed_states, np.nan)
-    print(f'nf shape: {nf_observed_states.shape}')
-
     any_observed_states_valid_mask = np.sum(point_mask, axis=1) > 0
     observed_states = observed_states[any_observed_states_valid_mask]
     point_mask = point_mask[any_observed_states_valid_mask]
@@ -466,7 +459,6 @@ def rasterize_road_map(data, save_img=False):
     return torch.FloatTensor(road_map)
 
 def collate_target_flow_field(data):
-    # TODO: collate ground truth flow field
     unobserved_positions = np.stack((data['state/future/x'], data['state/future/y']), axis=-1)
 
     max_agents, timesteps, xy = unobserved_positions.shape
@@ -485,22 +477,16 @@ def collate_target_flow_field(data):
     is_valid_mask = data['state/future/valid'] > 0.
     point_mask = np.logical_and(fov_mask, is_valid_mask)
 
-    # TODO: flatten agent and timestep dim and filter based on the point mask
+    unobserved_positions = unobserved_positions.reshape(-1, 2)
+    future_times = future_times.reshape(-1)
+    future_velocity = future_velocity.reshape(-1, 2)
+    point_mask = point_mask.reshape(-1)
+
+    unobserved_positions = unobserved_positions[point_mask]
+    future_times = future_times[point_mask]
+    future_velocity = future_velocity[point_mask]
 
     return torch.FloatTensor(unobserved_positions), torch.FloatTensor(future_times), torch.FloatTensor(future_velocity)
-
-    future_positions = np.stack((data['state/future/x'], data['state/future/y']), axis=-1)
-    future_velocities = np.stack((data['state/future/velocity_x'], data['state/future/velocity_y']), axis=-1)
-    future_states_valid = data['state/future/valid'] > 0.
-
-    #print(future_positions.shape)
-    #print(future_velocities.shape)
-    #print(future_states_valid.shape)
-
-    # filter future_positions and future_velocities by future_states_valid
-    # produce flow estimate tensor
-
-    return torch.rand(224, 224, 3) # placeholder
 
 def collate_target_occupancy_grid(data):
     future_positions = np.stack((data['state/future/x'], data['state/future/y']), axis=-1)

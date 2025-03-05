@@ -14,9 +14,11 @@ class ODEFunc(nn.Module):
 			layers.append(ConcatSquashLinear(dim_list[i], dim_list[i + 1], condition_dim + 1))
 		self.layers = nn.ModuleList(layers)
 
-	def _h_dot(self, t, h, scene_context):		
-		time_context = t.expand(h.shape[0], 1)
-		context = torch.cat([time_context, scene_context], dim=-1)
+	def _h_dot(self, t, h, scene_context):
+		scene_context = scene_context.unsqueeze(1)
+		scene_context = scene_context.expand(scene_context.shape[0], t.shape[1], scene_context.shape[2])
+		t = t.unsqueeze(-1)
+		context = torch.cat([t, scene_context], dim=-1)
 
 		h_dot = h
 		for l, layer in enumerate(self.layers):
@@ -39,7 +41,7 @@ class ODE(nn.Module):
 		
 	def forward(self, t, h, scene_context):
 		states = (h, scene_context)
-		flow = self.vector_field(t, states)
+		flow, _ = self.vector_field(t, states)
 		return flow
 	
 	def solve_ivp(self, initial_value, scene_context):
