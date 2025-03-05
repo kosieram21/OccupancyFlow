@@ -383,18 +383,18 @@ def collate_traffic_light_state(data):
     return traffic_light_impage_points, traffic_light_state
 
 def extract_lines(xy, id, typ):
-    line = [] # a list of points  
-    lines = [] # a list of lines
+    points = [] 
+    lines = []
     length = xy.shape[0]
     for i, p in enumerate(xy):
-        line.append(p)
+        points.append(p)
         next_id = id[i+1] if i < length-1 else id[i]
         current_id = id[i]
         if next_id != current_id or i == length-1:
             if typ in [18, 19]:
-                line.append(line[0])
-            lines.append(line)
-            line = []
+                points.append(points[0])
+            lines.append(points)
+            points = []
     return lines
 
 def rasterize_road_map(data, save_img=False):
