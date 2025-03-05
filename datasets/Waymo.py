@@ -373,7 +373,7 @@ def extract_lines(xy, id, typ):
             line = []
     return lines
 
-def collate_road_map(data):
+def rasterize_road_map(data, save_img=False):
     roadgraph_points, roadgraph_type, roadgraph_types, roadgraph_id = collate_roadgraph(data)
     traffic_light_points, traffic_light_state = collate_traffic_light_state(data)
 
@@ -419,7 +419,8 @@ def collate_road_map(data):
     fig.canvas.draw()
     road_map = np.array(fig.canvas.renderer.buffer_rgba())[:,:,:3]
 
-    #fig.savefig("roadmap.png", bbox_inches='tight', dpi=DPI)
+    if save_img:
+        fig.savefig("roadmap.png", bbox_inches='tight', dpi=DPI)
 
     plt.close('all')
 
@@ -452,7 +453,7 @@ def waymo_collate_fn(batch):
     target_occupancy_grids = []
 
     for data in batch:
-        road_maps.append(collate_road_map(data))
+        road_maps.append(rasterize_road_map(data))
         agent_trajectories.append(collate_agent_trajectories(data))
         target_flow_fields.append(collate_target_flow_field(data))
         target_occupancy_grids.append(collate_target_occupancy_grid(data))
