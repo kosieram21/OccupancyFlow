@@ -414,7 +414,7 @@ def rasterize_road_map(data, save_img=False):
         light_circle = plt.Circle(lp, 0.08*big, color=light_state_map[ls], zorder=2)
         ax.add_artist(light_circle)
 
-    ax.axis([0,GRID_SIZE,0,GRID_SIZE])
+    ax.axis([0, GRID_SIZE, 0, GRID_SIZE])
     ax.set_aspect('equal')
     fig.canvas.draw()
     road_map = np.array(fig.canvas.renderer.buffer_rgba())[:,:,:3]

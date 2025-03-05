@@ -13,7 +13,7 @@ class OccupancyFlowNetwork(nn.Module):
 		self.scence_encoder = SceneEncoder(road_map_image_size, trajectory_feature_dim, 
 										   motion_encoder_hidden_dim, motion_encoder_seq_len,
 										   token_dim, embedding_dim)
-		self.flow_field = ODE(2, embedding_dim, flow_field_hidden_dim)
+		self.flow_field = ODE(2, embedding_dim, (flow_field_hidden_dim for _ in range(4)))
 
 	def forward(self, t, h, road_map, agent_trajectories):
 		scene_context = self.scence_encoder(road_map, agent_trajectories)
