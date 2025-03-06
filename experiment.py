@@ -2,6 +2,7 @@ import torch
 from torch.utils.data import DataLoader
 from datasets.Waymo import WaymoDataset, waymo_collate_fn, create_idx
 from model import OccupancyFlowNetwork
+from train import train
 
 should_index = False
 
@@ -20,22 +21,26 @@ occupancy_flow_net = OccupancyFlowNetwork(road_map_image_size=224, trajectory_fe
                                           motion_encoder_hidden_dim=512, motion_encoder_seq_len=11,
                                           token_dim=768, embedding_dim=2048, flow_field_hidden_dim=512).to(device)
 
-road_map, agent_trajectories, unobserved_positions, future_times, target_velocity, target_occupancy_grid = next(iter(dataloader))
-road_map = road_map.to(device)
-agent_trajectories = agent_trajectories.to(device)
-unobserved_positions = unobserved_positions.to(device)
-future_times = future_times.to(device)
-target_velocity = target_velocity.to(device)
-target_occupancy_grid = target_occupancy_grid.to(device)
+# road_map, agent_trajectories, unobserved_positions, future_times, target_velocity, target_occupancy_grid = next(iter(dataloader))
+# road_map = road_map.to(device)
+# agent_trajectories = agent_trajectories.to(device)
+# unobserved_positions = unobserved_positions.to(device)
+# future_times = future_times.to(device)
+# target_velocity = target_velocity.to(device)
+# target_occupancy_grid = target_occupancy_grid.to(device)
 
-print(road_map.shape)
-print(agent_trajectories.shape)
-print(unobserved_positions.shape)
-print(future_times.shape)
-print(target_velocity.shape)
-#embedding = occupancy_flow_net.scence_encoder(road_map, agent_trajectories)
-#print(embedding.shape)
-flow = occupancy_flow_net(future_times, unobserved_positions, road_map, agent_trajectories)
-print(flow.shape)
-#for agent_trajectories, road_graph, traffic_light_state, target_flow_field, target_occupancy_grid in dataloader:
-#    embedding = encoder(agent_trajectories, road_graph, traffic_light_state)
+# print(f'road map: {road_map.shape}')
+# print(f'agent trajectories: {agent_trajectories.shape}')
+# print(f'unobserved positions: {unobserved_positions.shape}')
+# print(f'future times: {future_times.shape}')
+# print(f'target velocity: {target_velocity.shape}')
+# flow = occupancy_flow_net(future_times, unobserved_positions, road_map, agent_trajectories)
+# print(f'flow: {flow.shape}')
+
+train(dataloader, 
+      occupancy_flow_net, 
+      epochs=1, 
+      lr=1e-3,
+      weight_decay=0,
+      gamma=0.999,
+      device=device)
