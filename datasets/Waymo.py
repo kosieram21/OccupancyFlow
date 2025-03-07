@@ -338,13 +338,13 @@ def collate_agent_trajectories(data):
     past_states = np.stack((data['state/past/bbox_yaw'],
                             data['state/past/velocity_x'], data['state/past/velocity_y'], data['state/past/vel_yaw'],
                             data['state/past/width'], data['state/past/length'],
-                            data['state/past/timestamp_micros']), axis=-1)
+                            data['state/past/timestamp_micros'] / 1000000), axis=-1)
     past_states_valid = data['state/past/valid'] > 0.
 
     current_states = np.stack((data['state/current/bbox_yaw'],
                                data['state/current/velocity_x'], data['state/current/velocity_y'], data['state/current/vel_yaw'],
                                data['state/current/width'], data['state/current/length'],
-                               data['state/current/timestamp_micros']), axis=-1)
+                               data['state/current/timestamp_micros'] / 1000000), axis=-1)
     current_states_valid = data['state/current/valid'] > 0.
 
     observed_states = np.concatenate((past_states, current_states), axis=1)
@@ -471,7 +471,7 @@ def collate_target_flow_field(data):
     unobserved_positions = centered_and_rotated_unobserved_positions.reshape(max_agents, timesteps, xy)
     fov_mask = fov_mask.reshape(max_agents, timesteps)
 
-    future_times = data['state/future/timestamp_micros']
+    future_times = data['state/future/timestamp_micros'] / 1000000
     future_velocity = np.stack((data['state/future/velocity_x'], data['state/future/velocity_y']), axis=-1)
 
     is_valid_mask = data['state/future/valid'] > 0.

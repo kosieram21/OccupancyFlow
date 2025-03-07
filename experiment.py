@@ -16,6 +16,7 @@ dataset = WaymoDataset(tfrecord_path, idx_path)
 dataloader = DataLoader(dataset, batch_size=1, collate_fn=lambda x: waymo_collate_fn(x))
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
+print(device)
 
 occupancy_flow_net = OccupancyFlowNetwork(road_map_image_size=224, trajectory_feature_dim=9, 
                                           motion_encoder_hidden_dim=512, motion_encoder_seq_len=11,
