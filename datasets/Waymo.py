@@ -460,7 +460,9 @@ def rasterize_road_map(data, save_img=False):
     return torch.FloatTensor(road_map)
 
 def collate_target_flow_field(data):
+    type_mask = data['state/type'] == 1
     unobserved_positions = np.stack((data['state/future/x'], data['state/future/y']), axis=-1)
+    unobserved_positions = unobserved_positions[type_mask]
 
     max_agents, timesteps, xy = unobserved_positions.shape
     unobserved_positions = unobserved_positions.reshape(-1, xy)
@@ -475,7 +477,10 @@ def collate_target_flow_field(data):
     future_times = data['state/future/timestamp_micros'] / 1000000
     future_velocity = np.stack((data['state/future/velocity_x'], data['state/future/velocity_y']), axis=-1)
 
-    is_valid_mask = data['state/future/valid'] > 0.
+    future_times = future_times[type_mask]
+    future_velocity = future_velocity[type_mask]
+
+    is_valid_mask = data['state/future/valid'][type_mask] > 0.
     point_mask = np.logical_and(fov_mask, is_valid_mask)
 
     unobserved_positions = unobserved_positions.reshape(-1, 2)
