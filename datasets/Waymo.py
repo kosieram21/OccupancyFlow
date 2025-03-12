@@ -251,6 +251,7 @@ def transform(feature):
     return feature
 
 def create_idx(tfrecord_dir, idx_dir):
+    os.makedirs(idx_dir, exist_ok=True)
     for tfrecord in tqdm(glob.glob(tfrecord_dir+'/*')):
         idxname = idx_dir + '/' + tfrecord.split('/')[-1]
         call(["tfrecord2idx", tfrecord, idxname])

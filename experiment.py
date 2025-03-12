@@ -4,13 +4,13 @@ from datasets.Waymo import WaymoDataset, waymo_collate_fn, create_idx
 from model import OccupancyFlowNetwork
 from train import train
 
-should_index = False
+should_index = True
 
 tfrecord_path = '../data1/waymo_dataset/uncompressed/tf_example/validation'
-idx_path = '../data/idxs_validation_bs_1'
+idx_path = '../idx/validation'
 
 if should_index:
-    create_idx(tfrecord_path, idx_path)
+	create_idx(tfrecord_path, idx_path)
 
 dataset = WaymoDataset(tfrecord_path, idx_path)
 dataloader = DataLoader(dataset, batch_size=1, collate_fn=lambda x: waymo_collate_fn(x))
@@ -19,8 +19,9 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print(device)
 
 occupancy_flow_net = OccupancyFlowNetwork(road_map_image_size=224, trajectory_feature_dim=9, 
-                                          motion_encoder_hidden_dim=512, motion_encoder_seq_len=11,
-                                          token_dim=768, embedding_dim=2048, flow_field_hidden_dim=512).to(device)
+										  motion_encoder_hidden_dim=512, motion_encoder_seq_len=11,
+										  flow_field_hidden_dim=512, flow_field_fourier_features=128,
+										  token_dim=768, embedding_dim=2048).to(device)
 
 # road_map, agent_trajectories, unobserved_positions, future_times, target_velocity, target_occupancy_grid = next(iter(dataloader))
 # road_map = road_map.to(device)
@@ -39,9 +40,9 @@ occupancy_flow_net = OccupancyFlowNetwork(road_map_image_size=224, trajectory_fe
 # print(f'flow: {flow.shape}')
 
 train(dataloader, 
-      occupancy_flow_net, 
-      epochs=1, 
-      lr=1e-3,
-      weight_decay=0,
-      gamma=0.999,
-      device=device)
+	  occupancy_flow_net, 
+	  epochs=1, 
+	  lr=1e-3,
+	  weight_decay=0,
+	  gamma=0.999,
+	  device=device)

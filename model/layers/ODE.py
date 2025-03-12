@@ -5,14 +5,26 @@ from torchdiffeq import odeint_adjoint
 from model.layers.SquashLinear import ConcatSquashLinear
 	
 class ODEFunc(nn.Module):
-	def __init__(self, input_dim, condition_dim, hidden_dims):
+	def __init__(self, input_dim, condition_dim, hidden_dims, num_fourier_features):
 		super(ODEFunc, self).__init__()
+		self.num_fourier_features = num_fourier_features
 
-		dim_list = [input_dim] + list(hidden_dims) + [input_dim]
+		fourier_expanded_dim = input_dim + (input_dim * num_fourier_features)
+		dim_list = [fourier_expanded_dim] + list(hidden_dims) + [input_dim]
 		layers = []
 		for i in range(len(dim_list) - 1):
 			layers.append(ConcatSquashLinear(dim_list[i], dim_list[i + 1], condition_dim + 1))
 		self.layers = nn.ModuleList(layers)
+
+	def compute_positional_fourier_features(self, x):
+		encodings = [x]
+		for i in range(self.num_fourier_features // 2):
+			freq = 2.0 ** i
+			sin_features = torch.sin(freq * x)
+			cos_features = torch.cos(freq * x)
+			encodings.append(sin_features)
+			encodings.append(cos_features)
+		return torch.cat(encodings, dim=-1)
 
 	def _h_dot(self, t, h, scene_context):
 		scene_context = scene_context.unsqueeze(1)
@@ -30,14 +42,15 @@ class ODEFunc(nn.Module):
 	def forward(self, t, states):
 		h = states[0]
 		scene_context = states[1]
-		h_dot = self._h_dot(t, h, scene_context)
+		h_fourier = self.compute_positional_fourier_features(h)
+		h_dot = self._h_dot(t, h_fourier, scene_context)
 		return h_dot, torch.zeros_like(scene_context).requires_grad_(True)
 	
 class ODE(nn.Module):
-	def __init__(self, input_dim, condition_dim, hidden_dims):
+	def __init__(self, input_dim, condition_dim, hidden_dims, num_fourier_features):
 		super(ODE, self).__init__()
 
-		self.vector_field = ODEFunc(input_dim, condition_dim, hidden_dims)
+		self.vector_field = ODEFunc(input_dim, condition_dim, hidden_dims, num_fourier_features)
 		
 	def forward(self, t, h, scene_context):
 		states = (h, scene_context)
