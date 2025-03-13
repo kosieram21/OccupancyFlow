@@ -355,10 +355,10 @@ def collate_agent_trajectories(data):
     is_valid_mask = np.concatenate((past_states_valid, current_states_valid), axis=1)
     point_mask = np.logical_and(fov_mask, is_valid_mask) # is_valid_mask
 
-    #any_observed_states_valid_mask = np.sum(point_mask, axis=1) > 0
-    #observed_states = observed_states[any_observed_states_valid_mask]
-    #point_mask = point_mask[any_observed_states_valid_mask]
-    #observed_states = np.where(point_mask[..., None], observed_states, np.nan)
+    any_observed_states_valid_mask = np.sum(point_mask, axis=1) > 0
+    observed_states = observed_states[any_observed_states_valid_mask]
+    point_mask = point_mask[any_observed_states_valid_mask]
+    observed_states = np.where(point_mask[..., None], observed_states, np.nan)
 
     return torch.FloatTensor(observed_states)
 
