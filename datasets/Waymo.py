@@ -506,7 +506,7 @@ def waymo_collate_fn(batch):
 
     for data in batch:
         # TODO: if we want to batch we need to be able to handle variable sized tensors
-        road_maps.append(rasterize_road_map(data, save_img=True))
+        road_maps.append(rasterize_road_map(data))
         agent_trajectories.append(collate_agent_trajectories(data))
         pos, t, vel = collate_target_flow_field(data)
         unobserved_positions.append(pos)
