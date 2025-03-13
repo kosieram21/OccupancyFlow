@@ -406,7 +406,7 @@ def extract_lines(xy, id, typ):
             points = []
     return lines
 
-def rasterize_road_map(data, save_img=False):
+def rasterize_road_map(data):
     roadgraph_points, roadgraph_type, roadgraph_types, roadgraph_id = collate_roadgraph(data)
     traffic_light_points, traffic_light_state = collate_traffic_light_state(data)
 
@@ -451,9 +451,6 @@ def rasterize_road_map(data, save_img=False):
     ax.set_aspect('equal')
     fig.canvas.draw()
     road_map = np.array(fig.canvas.renderer.buffer_rgba())[:,:,:3]
-
-    if save_img:
-        fig.savefig("roadmap.png", bbox_inches='tight', dpi=DPI)
 
     plt.close('all')
 
