@@ -325,6 +325,7 @@ def collate_agent_trajectories(data):
     past_positions = np.stack((data['state/past/x'], data['state/past/y']), axis=-1)
     current_position = np.stack((data['state/current/x'], data['state/current/y']), axis=-1)
     observed_positions = np.concatenate((past_positions, current_position), axis=1)
+    print(observed_positions[0])
 
     max_agents, timesteps, xy = observed_positions.shape
     observed_positions = observed_positions.reshape(-1, xy)
@@ -334,6 +335,7 @@ def collate_agent_trajectories(data):
     fov_mask = get_fov_mask(centered_and_rotated_image_observed_positions)
 
     observed_positions = centered_and_rotated_observed_positions.reshape(max_agents, timesteps, xy)
+    print(observed_positions[0])
     fov_mask = fov_mask.reshape(max_agents, timesteps)
 
     past_states = np.stack((data['state/past/bbox_yaw'],
@@ -353,10 +355,10 @@ def collate_agent_trajectories(data):
     is_valid_mask = np.concatenate((past_states_valid, current_states_valid), axis=1)
     point_mask = np.logical_and(fov_mask, is_valid_mask) # is_valid_mask
 
-    any_observed_states_valid_mask = np.sum(point_mask, axis=1) > 0
-    observed_states = observed_states[any_observed_states_valid_mask]
-    point_mask = point_mask[any_observed_states_valid_mask]
-    observed_states = np.where(point_mask[..., None], observed_states, np.nan)
+    #any_observed_states_valid_mask = np.sum(point_mask, axis=1) > 0
+    #observed_states = observed_states[any_observed_states_valid_mask]
+    #point_mask = point_mask[any_observed_states_valid_mask]
+    #observed_states = np.where(point_mask[..., None], observed_states, np.nan)
 
     return torch.FloatTensor(observed_states)
 
