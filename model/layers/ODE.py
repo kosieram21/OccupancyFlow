@@ -27,10 +27,13 @@ class ODEFunc(nn.Module):
 		return torch.cat(encodings, dim=-1)
 
 	def _h_dot(self, t, h, scene_context):
-		scene_context = scene_context.unsqueeze(1)
-		scene_context = scene_context.expand(scene_context.shape[0], t.shape[1], scene_context.shape[2])
-		t = t.unsqueeze(-1)
-		context = torch.cat([t, scene_context], dim=-1)
+		if scene_context is not None:
+			scene_context = scene_context.unsqueeze(1)
+			scene_context = scene_context.expand(scene_context.shape[0], t.shape[1], scene_context.shape[2])
+			t = t.unsqueeze(-1)
+			context = torch.cat([t, scene_context], dim=-1)
+		else:
+			context = t.unsqueeze(-1)
 
 		h_dot = h
 		for l, layer in enumerate(self.layers):
@@ -44,7 +47,7 @@ class ODEFunc(nn.Module):
 		scene_context = states[1]
 		h_fourier = self.compute_positional_fourier_features(h)
 		h_dot = self._h_dot(t, h_fourier, scene_context)
-		return h_dot, torch.zeros_like(scene_context).requires_grad_(True)
+		return h_dot, torch.zeros_like(scene_context).requires_grad_(True) if scene_context else None
 	
 class ODE(nn.Module):
 	def __init__(self, input_dim, condition_dim, hidden_dims, num_fourier_features):

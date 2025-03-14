@@ -2,9 +2,10 @@ import torch
 from torch.utils.data import DataLoader
 from datasets.Waymo import WaymoDataset, waymo_collate_fn, create_idx
 from model import OccupancyFlowNetwork
+from model.layers.ODE import ODE # TODO: delete me
 from train import train
 
-should_index = True
+should_index = False
 
 tfrecord_path = '../data1/waymo_dataset/uncompressed/tf_example/validation'
 idx_path = '../idx/validation'
@@ -22,6 +23,7 @@ occupancy_flow_net = OccupancyFlowNetwork(road_map_image_size=224, trajectory_fe
 										  motion_encoder_hidden_dim=512, motion_encoder_seq_len=11,
 										  flow_field_hidden_dim=512, flow_field_fourier_features=128,
 										  token_dim=768, embedding_dim=2048).to(device)
+flow_field = ODE(2, 0, (512 for _ in range(4)), 128).to(device)
 
 # road_map, agent_trajectories, unobserved_positions, future_times, target_velocity, target_occupancy_grid = next(iter(dataloader))
 # road_map = road_map.to(device)
@@ -40,7 +42,7 @@ occupancy_flow_net = OccupancyFlowNetwork(road_map_image_size=224, trajectory_fe
 # print(f'flow: {flow.shape}')
 
 train(dataloader, 
-	  occupancy_flow_net, 
+	  flow_field,#occupancy_flow_net, 
 	  epochs=1, 
 	  lr=1e-3,
 	  weight_decay=0,
