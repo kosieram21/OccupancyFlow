@@ -21,8 +21,8 @@ def train(dataloader, model, epochs, lr, weight_decay, gamma, device):
         target_velocity = target_velocity.to(device)
         target_occupancy_grid = target_occupancy_grid.to(device)
 
-        #flow = model(future_times, unobserved_positions, road_map, agent_trajectories)
-        flow = model(future_times, unobserved_positions, None)
+        flow = model(future_times, unobserved_positions, road_map, agent_trajectories)
+        #flow = model(future_times, unobserved_positions, None)
         loss = F.mse_loss(flow, target_velocity)
         print(f'Batch {num_batches+1}, Loss: {loss}')
 

@@ -22,8 +22,8 @@ print(device)
 occupancy_flow_net = OccupancyFlowNetwork(road_map_image_size=224, trajectory_feature_dim=9, 
 										  motion_encoder_hidden_dim=512, motion_encoder_seq_len=11,
 										  flow_field_hidden_dim=512, flow_field_fourier_features=128,
-										  token_dim=768, embedding_dim=2048).to(device)
-flow_field = ODE(2, 0, (512 for _ in range(4)), 128).to(device)
+										  token_dim=768, embedding_dim=128).to(device)
+#flow_field = ODE(2, 0, (512 for _ in range(4)), 128).to(device)
 
 # road_map, agent_trajectories, unobserved_positions, future_times, target_velocity, target_occupancy_grid = next(iter(dataloader))
 # road_map = road_map.to(device)
@@ -42,7 +42,7 @@ flow_field = ODE(2, 0, (512 for _ in range(4)), 128).to(device)
 # print(f'flow: {flow.shape}')
 
 train(dataloader, 
-	  flow_field,#occupancy_flow_net, 
+	  occupancy_flow_net, 
 	  epochs=1, 
 	  lr=1e-3,
 	  weight_decay=0,
