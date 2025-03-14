@@ -8,12 +8,20 @@ def train(dataloader, model, epochs, lr, weight_decay, gamma, device):
     optim = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optim, gamma=gamma)
 
+    # hack: store 10 batches up front
+    batches = []
+    for i, batch in enumerate(dataloader):
+        if i >= 10:
+            break
+        batches.append(batch)
+
     # TODO: something is wrong with the data. we need to be able to just fit a flow field for a single data sample...
     #road_map, agent_trajectories, unobserved_positions, future_times, target_velocity, target_occupancy_grid = next(iter(dataloader))
-    for epoch in range(epochs): #range(10000):
+    for epoch in range(10000): #range(epochs):
         epoch_loss = 0
         num_batches = 0
-        for road_map, agent_trajectories, unobserved_positions, future_times, target_velocity, target_occupancy_grid in dataloader:
+        #for road_map, agent_trajectories, unobserved_positions, future_times, target_velocity, target_occupancy_grid in dataloader:
+        for road_map, agent_trajectories, unobserved_positions, future_times, target_velocity, target_occupancy_grid in batches:
             road_map = road_map.to(device)
             agent_trajectories = agent_trajectories.to(device)
             unobserved_positions = unobserved_positions.to(device)
