@@ -48,9 +48,11 @@ class SceneEncoder(nn.Module):
     def forward(self, road_map, agent_trajectories):
         t = torch.linspace(0., 1., self.motion_encoder_seq_len).to(agent_trajectories)
         agent_tokens = self.motion_encoder(t, agent_trajectories)
-        #environment_tokens = self.visual_encoder(road_map)
-        #agent_tokens = self.interaction_transformer1(agent_tokens)
-        #agent_tokens = agent_tokens + self.fusion_transformer(agent_tokens, environment_tokens)
-        #agent_tokens = self.interaction_transformer2(agent_tokens)
+        # TODO: as we imporve normalization maybe just test motion encoder first
+        environment_tokens = self.visual_encoder(road_map)
+        agent_tokens = self.interaction_transformer1(agent_tokens)
+        agent_tokens = agent_tokens + self.fusion_transformer(agent_tokens, environment_tokens)
+        agent_tokens = self.interaction_transformer2(agent_tokens)
+        # END TODO
         embedding = self.pooling_module(agent_tokens)
         return embedding
