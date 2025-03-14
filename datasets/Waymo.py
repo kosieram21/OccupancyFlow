@@ -325,7 +325,6 @@ def collate_agent_trajectories(data):
     past_positions = np.stack((data['state/past/x'], data['state/past/y']), axis=-1)
     current_position = np.stack((data['state/current/x'], data['state/current/y']), axis=-1)
     observed_positions = np.concatenate((past_positions, current_position), axis=1)
-    print(observed_positions[0])
 
     max_agents, timesteps, xy = observed_positions.shape
     observed_positions = observed_positions.reshape(-1, xy)
@@ -335,7 +334,6 @@ def collate_agent_trajectories(data):
     fov_mask = get_fov_mask(centered_and_rotated_image_observed_positions)
 
     observed_positions = centered_and_rotated_observed_positions.reshape(max_agents, timesteps, xy)
-    print(observed_positions[0])
     fov_mask = fov_mask.reshape(max_agents, timesteps)
 
     past_states = np.stack((data['state/past/bbox_yaw'],
