@@ -355,6 +355,11 @@ def collate_agent_trajectories(data):
 
     observed_states = np.concatenate((past_states, current_states), axis=1)
     observed_states = np.concatenate((observed_positions, observed_states), axis=-1)
+
+    agent_type = np.reshape(data['state/type'], (128, 1, 1))
+    agent_type = np.tile(agent_type, (1, 11, 1))
+    observed_states = np.concatenate((observed_states, agent_type), axis=-1)
+    
     is_valid_mask = np.concatenate((past_states_valid, current_states_valid), axis=1)
     point_mask = np.logical_and(fov_mask, is_valid_mask) # is_valid_mask
 

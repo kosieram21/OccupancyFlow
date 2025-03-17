@@ -11,9 +11,11 @@ class OccupancyFlowNetwork(nn.Module):
 				 token_dim, embedding_dim):
 		super(OccupancyFlowNetwork, self).__init__()
 
-		self.scence_encoder = SceneEncoder(road_map_image_size, trajectory_feature_dim, 
-										   motion_encoder_hidden_dim, motion_encoder_seq_len,
-										   token_dim, embedding_dim)
+		if embedding_dim > 0 :
+			self.scence_encoder = SceneEncoder(road_map_image_size, trajectory_feature_dim, 
+									  		   motion_encoder_hidden_dim, motion_encoder_seq_len,
+											   token_dim, embedding_dim)
+			
 		self.flow_field = ODE(2, embedding_dim, 
 							 (flow_field_hidden_dim for _ in range(4)), 
 							  flow_field_fourier_features)
