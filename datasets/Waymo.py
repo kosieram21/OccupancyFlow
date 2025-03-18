@@ -477,7 +477,7 @@ def rasterize_road_map(data):
 
     return torch.FloatTensor(road_map)
 
-def expand_to_bounding_box(positions, heights, lengths, values = None, step_size=0.5):
+def expand_to_bounding_box(positions, heights, lengths, values = None, step_size=1.0):
     expanded = []
 
     for i in range(positions.shape[0]):

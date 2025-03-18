@@ -47,7 +47,7 @@ class ODEFunc(nn.Module):
 		scene_context = states[1]
 		h_fourier = self.compute_positional_fourier_features(h)
 		h_dot = self._h_dot(t, h_fourier, scene_context)
-		return h_dot, torch.zeros_like(scene_context).requires_grad_(True) #if scene_context else None
+		return h_dot, None #torch.zeros_like(scene_context).requires_grad_(True) #if scene_context else None
 	
 class ODE(nn.Module):
 	def __init__(self, input_dim, condition_dim, hidden_dims, num_fourier_features):
