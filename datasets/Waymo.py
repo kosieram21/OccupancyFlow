@@ -283,7 +283,7 @@ def normalize_about_sdc(points, data):
     angle = math.pi / 2 - sdc_bbox_yaw
     centered_and_rotated_points = rotate_points_around_origin(centered_points, angle)
 
-    return centered_and_rotated_points
+    return centered_and_rotated_points, angle, sdc_xy
 
 def denormalize_from_sdc(centered_and_rotated_points, data):
     # get self-driving car (sdc) current position and yaw
@@ -297,7 +297,7 @@ def denormalize_from_sdc(centered_and_rotated_points, data):
     centered_points = rotate_points_around_origin(centered_and_rotated_points, angle)
     points = centered_points + sdc_xy
     
-    return points
+    return points, angle, sdc_xy
 
 def get_image_coordinates(world_points):
     scale = np.array([PIXELS_PER_METER, -PIXELS_PER_METER])
@@ -310,6 +310,16 @@ def get_world_coordinates(image_points):
     scale = np.array([PIXELS_PER_METER, -PIXELS_PER_METER])
     world_points = (image_points - offset) / scale
     return world_points
+
+def get_image_velocity(world_velocity):
+    scale = np.array([PIXELS_PER_METER, PIXELS_PER_METER])
+    image_velocity = world_velocity * scale
+    return image_velocity
+
+def get_world_velocity(image_velocity):
+    scale = np.array([PIXELS_PER_METER, PIXELS_PER_METER])
+    world_velocity = image_velocity / scale
+    return world_velocity
 
 def get_fov_mask(points):
     fov_mask = np.logical_and.reduce([
@@ -332,7 +342,7 @@ def collate_agent_trajectories(data):
     # since normalizing about the sdc rotates the trajectory we must also rotate the velocity.
     # the translation should not matter because the translated trajectory has the same velocity.
     # or do we simply update the bbox_yaw and vel_yaw by the rotation angle from the sdc?
-    centered_and_rotated_observed_positions = normalize_about_sdc(observed_positions, data)
+    centered_and_rotated_observed_positions, angle, translation = normalize_about_sdc(observed_positions, data)
     centered_and_rotated_observed_positions[:, 1] = -centered_and_rotated_observed_positions[:, 1]
     # should we use the image coordinates? or image coordinates divided by GRID_SIZE ([0,1] normalization)?
     # how would that impact width and length? I think we would need to rescale.
@@ -373,7 +383,7 @@ def collate_agent_trajectories(data):
 
 def collate_roadgraph(data):
     roadgraph_points = data['roadgraph_samples/xyz'][:,:2]
-    centered_and_rotated_roadgraph_points = normalize_about_sdc(roadgraph_points, data)
+    centered_and_rotated_roadgraph_points, angle, translation = normalize_about_sdc(roadgraph_points, data)
     roadgraph_image_points = get_image_coordinates(centered_and_rotated_roadgraph_points)
 
     fov_mask = get_fov_mask(roadgraph_image_points)
@@ -390,7 +400,7 @@ def collate_roadgraph(data):
 
 def collate_traffic_light_state(data):
     traffic_light_points = np.stack((data['traffic_light_state/current/x'][0], data['traffic_light_state/current/y'][0]), axis=-1)
-    centered_and_rotated_traffic_light_points = normalize_about_sdc(traffic_light_points, data)
+    centered_and_rotated_traffic_light_points, angle, translation = normalize_about_sdc(traffic_light_points, data)
     traffic_light_image_points = get_image_coordinates(centered_and_rotated_traffic_light_points)
 
     fov_mask = get_fov_mask(traffic_light_image_points)
@@ -475,7 +485,7 @@ def collate_target_flow_field(data):
     max_agents, timesteps, xy = unobserved_positions.shape
     unobserved_positions = unobserved_positions.reshape(-1, xy)
     
-    centered_and_rotated_unobserved_positions = normalize_about_sdc(unobserved_positions, data)
+    centered_and_rotated_unobserved_positions, angle, translation = normalize_about_sdc(unobserved_positions, data)
     centered_and_rotated_unobserved_positions[:, 1] = -centered_and_rotated_unobserved_positions[:, 1]
     centered_and_rotated_image_unobserved_positions = get_image_coordinates(centered_and_rotated_unobserved_positions)
     fov_mask = get_fov_mask(centered_and_rotated_image_unobserved_positions)
@@ -485,6 +495,7 @@ def collate_target_flow_field(data):
 
     future_times = data['state/future/timestamp_micros'] / 1000000
     future_velocity = np.stack((data['state/future/velocity_x'], data['state/future/velocity_y']), axis=-1)
+    future_velocity = rotate_points_around_origin(future_velocity, angle)
 
     future_times = future_times[type_mask]
     future_velocity = future_velocity[type_mask]
