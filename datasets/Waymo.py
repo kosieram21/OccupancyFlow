@@ -477,16 +477,49 @@ def rasterize_road_map(data):
 
     return torch.FloatTensor(road_map)
 
+def expand_to_bounding_box(positions, heights, lengths, values = None, step_size=0.1):
+    expanded = []
+
+    for i in range(positions.shape[0]):
+        x_center, y_center = positions[i]
+        height = heights[i][0]
+        length = lengths[i][0]
+        
+        x_min = x_center - length / 2
+        x_max = x_center + length / 2
+        y_min = y_center - height / 2
+        y_max = y_center + height / 2
+        
+        x_pos = np.arange(x_min, x_max, step_size)
+        y_pos = np.arange(y_min, y_max, step_size)
+
+        grid_x, grid_y = np.meshgrid(x_pos, y_pos)
+
+        if values is None:
+            expanded.extend(np.c_[grid_x.ravel(), grid_y.ravel()])
+        else:
+            value = values[i]
+            value_grid = []
+            for j in range(value.shape[0]):
+                value_grid.append(np.full_like(grid_x, value[j]))
+            expanded.extend(np.column_stack([v.ravel() for v in value_grid]))
+
+    return np.array(expanded)
+
 def collate_target_flow_field(data):
     type_mask = data['state/type'] == 1
     unobserved_positions = np.stack((data['state/future/x'], data['state/future/y']), axis=-1)
     unobserved_positions = unobserved_positions[type_mask]
+
+    agent_height = data['state/future/height'][type_mask].reshape(-1, 1)
+    agent_length = data['state/future/length'][type_mask].reshape(-1, 1)
 
     max_agents, timesteps, xy = unobserved_positions.shape
     unobserved_positions = unobserved_positions.reshape(-1, xy)
     
     centered_and_rotated_unobserved_positions, angle, translation = normalize_about_sdc(unobserved_positions, data)
     centered_and_rotated_unobserved_positions[:, 1] = -centered_and_rotated_unobserved_positions[:, 1]
+
     centered_and_rotated_image_unobserved_positions = get_image_coordinates(centered_and_rotated_unobserved_positions)
     fov_mask = get_fov_mask(centered_and_rotated_image_unobserved_positions)
 
@@ -511,6 +544,10 @@ def collate_target_flow_field(data):
     unobserved_positions = unobserved_positions[point_mask]
     future_times = future_times[point_mask]
     future_velocity = future_velocity[point_mask]
+
+    future_times = expand_to_bounding_box(unobserved_positions, agent_height, agent_length, future_times.reshape(-1, 1))
+    future_velocity = expand_to_bounding_box(unobserved_positions, agent_height, agent_length, future_velocity)
+    unobserved_positions = expand_to_bounding_box(unobserved_positions, agent_height, agent_length)
 
     return torch.FloatTensor(unobserved_positions), torch.FloatTensor(future_times), torch.FloatTensor(future_velocity)
 
