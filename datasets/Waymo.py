@@ -333,7 +333,7 @@ def collate_agent_trajectories(data):
     # the translation should not matter because the translated trajectory has the same velocity.
     # or do we simply update the bbox_yaw and vel_yaw by the rotation angle from the sdc?
     centered_and_rotated_observed_positions = normalize_about_sdc(observed_positions, data)
-    centered_and_rotated_observed_positions[:, 1] = -centered_and_rotated_observed_positions[:, 1] # why?
+    centered_and_rotated_observed_positions[:, 1] = -centered_and_rotated_observed_positions[:, 1]
     # should we use the image coordinates? or image coordinates divided by GRID_SIZE ([0,1] normalization)?
     # how would that impact width and length? I think we would need to rescale.
     centered_and_rotated_image_observed_positions = get_image_coordinates(centered_and_rotated_observed_positions)
@@ -476,6 +476,7 @@ def collate_target_flow_field(data):
     unobserved_positions = unobserved_positions.reshape(-1, xy)
     
     centered_and_rotated_unobserved_positions = normalize_about_sdc(unobserved_positions, data)
+    centered_and_rotated_unobserved_positions[:, 1] = -centered_and_rotated_unobserved_positions[:, 1]
     centered_and_rotated_image_unobserved_positions = get_image_coordinates(centered_and_rotated_unobserved_positions)
     fov_mask = get_fov_mask(centered_and_rotated_image_unobserved_positions)
 
