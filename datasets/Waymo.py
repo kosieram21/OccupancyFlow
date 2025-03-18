@@ -558,7 +558,7 @@ def collate_target_flow_field(data):
 
     unobserved_positions = unobserved_positions - agent_centers
     for i in range(unobserved_positions.shape[0]):
-        unobserved_positions[i] = rotate_points_around_origin(unobserved_positions[i], -bbox_yaw[i])
+        unobserved_positions[i] = rotate_points_around_origin(unobserved_positions[i], -bbox_yaw[i] - angle)
     unobserved_positions = unobserved_positions + agent_centers
 
     return torch.FloatTensor(unobserved_positions), torch.FloatTensor(future_times), torch.FloatTensor(future_velocity)
