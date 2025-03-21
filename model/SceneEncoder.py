@@ -50,10 +50,11 @@ class SceneEncoder(nn.Module):
         #agent_tokens = self.motion_encoder(t, agent_trajectories)
         # TODO: as we imporve normalization maybe just test motion encoder first
         environment_tokens = self.visual_encoder(road_map)
+        agent_tokens = environment_tokens # JUST FOR VISUAL ONLY TEST
+        #agent_tokens = environment_tokens # just for testing vision only modality
         #agent_tokens = self.interaction_transformer1(agent_tokens)
         #agent_tokens = agent_tokens + self.fusion_transformer(agent_tokens, environment_tokens)
         #agent_tokens = self.interaction_transformer2(agent_tokens)
         # END TODO
-        #embedding = self.pooling_module(agent_tokens)
-        embedding = self.pooling_module(environment_tokens)
+        embedding = self.pooling_module(agent_tokens)
         return embedding
