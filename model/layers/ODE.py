@@ -28,13 +28,11 @@ class ODEFunc(nn.Module):
 
 	def _h_dot(self, t, h, scene_context):
 		if scene_context is not None:
-			# TODO: is this correct?
 			scene_context = scene_context.unsqueeze(1)
 			scene_context = scene_context.expand(scene_context.shape[0], t.shape[1], scene_context.shape[2])
-			#t = t.unsqueeze(-1)
 			context = torch.cat([t, scene_context], dim=-1)
 		else:
-			context = t#.unsqueeze(-1)
+			context = t
 
 		h_dot = h
 		for l, layer in enumerate(self.layers):
