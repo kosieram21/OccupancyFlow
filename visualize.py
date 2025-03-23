@@ -59,7 +59,9 @@ def render_flow_field(road_map, times, positions, velocity):
         x_coords, y_coords = zip(*group_positions)
         ax.scatter(x_coords, y_coords, marker='o', s=5, color='blue')
         ax.quiver(x_coords, y_coords, group_velocity[:, 0], group_velocity[:, 1], 
-              angles='xy', scale_units='xy', scale=3.5, color='orange')
+              angles='xy', scale_units='xy', scale=4.0, 
+              color='orange', width=0.007, 
+              headwidth=4, headlength=5, headaxislength=3)
 
     anim = FuncAnimation(fig, update, frames=len(groups), repeat=False)
 
