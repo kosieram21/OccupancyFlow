@@ -4,6 +4,7 @@ import math
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+import torch.nn.functional as F
 from tfrecord.torch.dataset import MultiTFRecordDataset
 from subprocess import call
 from tqdm import tqdm
@@ -587,6 +588,17 @@ def collate_target_occupancy_grid(data):
     # TODO: collate ground truth occupancy grid
     return torch.rand(224, 224, 3) # placeholder
 
+def pad_tensors(tensors, max_size):
+    padded_tensors = []
+    for tensor in tensors:
+        samples = tensor.shape[0]
+        padding_size = max_size - samples
+        padding = [0] * (2 * tensor.dim())
+        padding[-1] = padding_size
+        padded_tensor = F.pad(tensor, padding)
+        padded_tensors.append(padded_tensor)
+    return padded_tensors
+
 def waymo_collate_fn(batch):
     road_maps = []
     agent_trajectories = []
@@ -604,6 +616,13 @@ def waymo_collate_fn(batch):
         future_times.append(t)
         future_velocities.append(vel)
         target_occupancy_grids.append(collate_target_occupancy_grid(data))
+
+    max_agents = max(t.shape[0] for t in agent_trajectories)
+    max_unobserved_positions = max(t.shape[0] for t in unobserved_positions)
+    agent_trajectories = pad_tensors(agent_trajectories, max_agents)
+    unobserved_positions = pad_tensors(unobserved_positions, max_unobserved_positions)
+    future_times = pad_tensors(future_times, max_unobserved_positions)
+    future_velocities = pad_tensors(future_velocities, max_unobserved_positions)
 
     road_map_batch = torch.stack(road_maps, dim=0)
     agent_trajectories_batch = torch.stack(agent_trajectories, dim=0)
