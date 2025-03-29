@@ -7,6 +7,6 @@ class SelfAttentionTransformer(nn.Module):
         self.transformer_layers = nn.TransformerEncoderLayer(d_model=token_dim, nhead=num_heads, batch_first=True)
         self.encoder = nn.TransformerEncoder(encoder_layer=self.transformer_layers, num_layers=num_layers)
 
-    def forward(self, x):
+    def forward(self, x, mask=None):
         x = self.encoder(x, is_causal=False)
         return x
