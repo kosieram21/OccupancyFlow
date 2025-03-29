@@ -340,20 +340,17 @@ def collate_agent_trajectories(data):
     max_agents, timesteps, xy = observed_positions.shape
     observed_positions = observed_positions.reshape(-1, xy)
     
-    # since normalizing about the sdc rotates the trajectory we must also rotate the velocity.
-    # the translation should not matter because the translated trajectory has the same velocity.
-    # or do we simply update the bbox_yaw and vel_yaw by the rotation angle from the sdc?
-    centered_and_rotated_observed_positions, angle, translation = normalize_about_sdc(observed_positions, data)
-    centered_and_rotated_observed_positions[:, 1] = -centered_and_rotated_observed_positions[:, 1]
     # should we use the image coordinates? or image coordinates divided by GRID_SIZE ([0,1] normalization)?
     # how would that impact width and length? I think we would need to rescale.
+    centered_and_rotated_observed_positions, angle, translation = normalize_about_sdc(observed_positions, data)
+    centered_and_rotated_observed_positions[:, 1] = -centered_and_rotated_observed_positions[:, 1]
+    
     centered_and_rotated_image_observed_positions = get_image_coordinates(centered_and_rotated_observed_positions)
     fov_mask = get_fov_mask(centered_and_rotated_image_observed_positions)
 
     observed_positions = centered_and_rotated_observed_positions.reshape(max_agents, timesteps, xy)
     fov_mask = fov_mask.reshape(max_agents, timesteps)
 
-    # is this the correct way to update vel_yaw and bbox_yaw?
     past_velocity = np.stack((data['state/past/velocity_x'], data['state/past/velocity_y']), axis=-1)
     past_velocity = rotate_points_around_origin(past_velocity, angle)
     past_bbox_yaw = -data['state/past/bbox_yaw'] - angle
