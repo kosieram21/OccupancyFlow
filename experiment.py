@@ -38,7 +38,7 @@ agent_trajectory_mask, flow_field_mask = next(iter(dataloader))
 
 road_map = road_map.to(device)
 agent_trajectories = agent_trajectories.to(device)
-
+agent_trajectory_mask = agent_trajectory_mask.to(device)
 
 import time
 
