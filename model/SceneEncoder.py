@@ -50,7 +50,7 @@ class SceneEncoder(nn.Module):
         agent_tokens = self.motion_encoder(t, agent_trajectories, agent_trajectory_mask)
         environment_tokens = self.visual_encoder(road_map)
         agent_tokens = self.interaction_transformer1(agent_tokens, agent_trajectory_mask)
-        agent_tokens = agent_tokens + self.fusion_transformer(agent_tokens, environment_tokens)
+        agent_tokens = agent_tokens + self.fusion_transformer(agent_tokens, environment_tokens, agent_trajectory_mask)
         agent_tokens = self.interaction_transformer2(agent_tokens, agent_trajectory_mask)
         embedding = self.pooling_module(agent_tokens)
         return embedding
