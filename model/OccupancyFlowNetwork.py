@@ -20,8 +20,8 @@ class OccupancyFlowNetwork(nn.Module):
 							 (flow_field_hidden_dim for _ in range(4)), 
 							  flow_field_fourier_features)
 
-	def forward(self, t, h, road_map, agent_trajectories, agent_trajectory_mask=None, flow_field_mask=None):
-		scene_context = self.scence_encoder(road_map, agent_trajectories, agent_trajectory_mask)
+	def forward(self, t, h, road_map, agent_trajectories, agent_mask=None, flow_field_mask=None):
+		scene_context = self.scence_encoder(road_map, agent_trajectories, agent_mask)
 		flow = self.flow_field(t, h, scene_context)
 		return flow
 	

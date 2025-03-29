@@ -623,7 +623,7 @@ def waymo_collate_fn(batch):
 
     max_agents = max(t.shape[0] for t in agent_trajectories)
     max_unobserved_positions = max(t.shape[0] for t in unobserved_positions)
-    agent_trajectories, agent_trajectory_mask = pad_tensors(agent_trajectories, max_agents)
+    agent_trajectories, agent_mask = pad_tensors(agent_trajectories, max_agents)
     unobserved_positions, flow_field_mask = pad_tensors(unobserved_positions, max_unobserved_positions)
     future_times, _ = pad_tensors(future_times, max_unobserved_positions)
     future_velocities, _ = pad_tensors(future_velocities, max_unobserved_positions)
@@ -634,7 +634,7 @@ def waymo_collate_fn(batch):
     future_times_batch = torch.stack(future_times, dim=0)
     future_velocities_batch = torch.stack(future_velocities, dim=0)
     target_occupancy_grid_batch = torch.stack(target_occupancy_grids, dim=0) # we won't use until later
-    agent_trajectory_mask_batch = torch.stack(agent_trajectory_mask, dim=0)
+    agent_mask_batch = torch.stack(agent_mask, dim=0)
     flow_field_mask_batch = torch.stack(flow_field_mask, dim=0)
 
     return (
@@ -643,6 +643,6 @@ def waymo_collate_fn(batch):
         unobserved_positions_batch,
         future_times_batch,
         future_velocities_batch,
-        agent_trajectory_mask_batch,
+        agent_mask_batch,
         flow_field_mask_batch
     )
