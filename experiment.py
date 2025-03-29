@@ -34,16 +34,16 @@ occupancy_flow_net = occupancy_flow_net.to(device)
 
 road_map, agent_trajectories, \
 unobserved_positions, future_times, target_velocity, \
-agent_trajectory_mask, flow_field_mask = next(iter(dataloader))
+agent_mask, flow_field_mask = next(iter(dataloader))
 
 road_map = road_map.to(device)
 agent_trajectories = agent_trajectories.to(device)
-agent_trajectory_mask = agent_trajectory_mask.to(device)
+agent_mask = agent_mask.to(device)
 
 import time
 
 start = time.time()
-embedding = occupancy_flow_net.scence_encoder(road_map, agent_trajectories, agent_trajectory_mask)
+embedding = occupancy_flow_net.scence_encoder(road_map, agent_trajectories, agent_mask)
 end = time.time()
 elapsed = end - start
 print(elapsed)
