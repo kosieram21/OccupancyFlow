@@ -8,5 +8,7 @@ class SelfAttentionTransformer(nn.Module):
         self.encoder = nn.TransformerEncoder(encoder_layer=self.transformer_layers, num_layers=num_layers)
 
     def forward(self, x, mask=None):
-        x = self.encoder(x, is_causal=False)
+        if mask is not None:
+            mask = (mask == 0)
+        x = self.encoder(x, src_key_padding_mask=mask, is_causal=False)
         return x
