@@ -44,16 +44,12 @@ class CDE(nn.Module):
 		self.f = CDEFunc(input_dim, embedding_dim, hidden_dim, num_layers)
 
 	def forward(self, t, x, mask=None):
-		print(f'x: {x.shape}')
-
 		if mask is not None:
 			batch_size, max_agents, _, _ = x.shape
 			embedding = torch.zeros(batch_size, max_agents, self.embed.out_features).to(x.device)
 			valid = [x[i, j] for i in range(batch_size) for j in range(max_agents) if mask[i, j]]
 			indicies = [(i, j) for i in range(batch_size) for j in range(max_agents) if mask[i, j]]
 			x = torch.stack(valid, dim=0)
-
-		print(f'masked x: {x.shape}')
 
 		spline = NaturalCubicSpline(t, x)
 		vector_field = VectorField(dX_dt=spline.derivative, f=self.f)
@@ -64,7 +60,5 @@ class CDE(nn.Module):
 			embedding[[i for i, j in indicies], [j for i, j in indicies]] = out[-1]
 		else:
 			embedding = out[-1]
-
-		print(f'embedding: {embedding.shape}')
 
 		return embedding
