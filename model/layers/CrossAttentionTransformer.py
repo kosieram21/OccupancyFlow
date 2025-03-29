@@ -18,13 +18,13 @@ class CrossAttentionLayer(nn.Module):
             nn.Linear(mlp_dim, d_model)
         )
         
-    def forward(self, query, key):
+    def forward(self, query, key, mask=None):
         norm_query = self.norm_query(query)
+        norm_query = norm_query * mask.unsqueeze(-1) if mask is not None else norm_query # TODO: double check this is correct
         attn_output, _ = self.cross_attention(
             query=norm_query,
             key=key,
-            value=key
-        )
+            value=key)
         query = query + attn_output
         
         norm_query = self.norm_mlp(query)
@@ -45,7 +45,7 @@ class CrossAttentionTransformer(nn.Module):
             ) for _ in range(num_layers)
         ])
 
-    def forward(self, x, y):
+    def forward(self, x, y, mask=None):
         for layer in self.layers:
-            x = layer(query=x, key=y)
+            x = layer(query=x, key=y, mask=mask)
         return x
