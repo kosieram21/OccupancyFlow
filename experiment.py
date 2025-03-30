@@ -32,26 +32,33 @@ print(f'Detected Device: {device}')
 
 occupancy_flow_net = occupancy_flow_net.to(device)
 
+# TODO: DELETE
 road_map, agent_trajectories, \
 unobserved_positions, future_times, target_velocity, \
 agent_mask, flow_field_mask = next(iter(dataloader))
 
 road_map = road_map.to(device)
 agent_trajectories = agent_trajectories.to(device)
+unobserved_positions = unobserved_positions.to(device)
+future_times = future_times.to(device)
+target_velocity = target_velocity.to(device)
 agent_mask = agent_mask.to(device)
+flow_field_mask = flow_field_mask.to(device)
 
 import time
 
 start = time.time()
-embedding = occupancy_flow_net.scence_encoder(road_map, agent_trajectories, agent_mask)
+embedding = occupancy_flow_net(future_times, unobserved_positions, road_map, agent_trajectories, agent_mask, flow_field_mask)
 end = time.time()
 elapsed = end - start
 print(elapsed)
 
-#train(dataloader, 
-#	  occupancy_flow_net, 
-#	  epochs=10, 
-#	  lr=1e-3,
-#	  weight_decay=0,
-#	  gamma=0.999,
-#	  device=device)
+# END DELETE
+
+train(dataloader, 
+	  occupancy_flow_net, 
+	  epochs=10, 
+	  lr=1e-3,
+	  weight_decay=0,
+	  gamma=0.999,
+	  device=device)

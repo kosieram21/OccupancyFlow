@@ -22,7 +22,7 @@ class OccupancyFlowNetwork(nn.Module):
 
 	def forward(self, t, h, road_map, agent_trajectories, agent_mask=None, flow_field_mask=None):
 		scene_context = self.scence_encoder(road_map, agent_trajectories, agent_mask)
-		flow = self.flow_field(t, h, scene_context)
+		flow = self.flow_field(t, h, scene_context, flow_field_mask)
 		return flow
 	
 	def warp_occupancy(self, occupancy, scene_context):
