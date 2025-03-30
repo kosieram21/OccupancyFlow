@@ -11,15 +11,21 @@ def train(dataloader, model, epochs, lr, weight_decay, gamma, device):
     for epoch in range(epochs):
         epoch_loss = 0
         num_batches = 0
-        for road_map, agent_trajectories, unobserved_positions, future_times, target_velocity, target_occupancy_grid in dataloader:
+        for road_map, agent_trajectories, unobserved_positions, future_times, target_velocity, agent_mask, flow_field_mask in dataloader:
             road_map = road_map.to(device)
             agent_trajectories = agent_trajectories.to(device)
             unobserved_positions = unobserved_positions.to(device)
             future_times = future_times.to(device)
             target_velocity = target_velocity.to(device)
-            target_occupancy_grid = target_occupancy_grid.to(device)
+            agent_mask = agent_mask.to(device)
+            flow_field_mask = flow_field_mask.to(device)
 
-            flow = model(future_times, unobserved_positions, road_map, agent_trajectories)
+            flow = model(future_times, unobserved_positions, road_map, agent_trajectories, agent_mask)
+            
+            flow_field_mask = flow_field_mask.view(-1)
+            flow = flow.view(-1, 2)[flow_field_mask == 1]
+            target_velocity = target_velocity.view(-1, 2)[flow_field_mask == 1]
+
             loss = F.mse_loss(flow, target_velocity)
             print(f'Batch {num_batches+1}, Loss: {loss}')
 

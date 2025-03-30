@@ -54,11 +54,12 @@ class ODE(nn.Module):
 
 		self.vector_field = ODEFunc(input_dim, condition_dim, hidden_dims, num_fourier_features)
 		
-	def forward(self, t, h, scene_context):
+	def forward(self, t, h, scene_context, mask=None):
+		# TODO: how should we use the mask here?
 		states = (h, scene_context)
 		flow, _ = self.vector_field(t, states)
 		return flow
 	
-	def solve_ivp(self, initial_value, scene_context):
+	def solve_ivp(self, initial_value, scene_context, mask=None):
 		# TODO: implement warp occupancy as an initial value problem (IVP)
 		return None
