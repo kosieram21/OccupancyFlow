@@ -100,14 +100,15 @@ def main(rank, world_size):
     torch.cuda.set_device(rank) if torch.cuda.is_available() else None
 
     # Create DistributedSampler for the dataset and update the DataLoader
-    #sampler = DistributedSampler(dataset, num_replicas=world_size, rank=rank)
+    #sampler = DistributedSampler(dataset, num_replicas=world_size, rank=rank) 
+    # TODO: are we even splitting the data correctly without the sampler??
     dataloader = DataLoader(dataset, batch_size=batch_size, collate_fn=lambda x: waymo_collate_fn(x))
     
     # Move model to the correct device (GPU or CPU)
     occupancy_flow_net.to(device)
     
     # Wrap the model with DDP
-    model = nn.parallel.DistributedDataParallel(occupancy_flow_net, device_ids=[rank] if torch.cuda.is_available() else None)
+    model = nn.parallel.DistributedDataParallel(occupancy_flow_net, device_ids=[rank] if torch.cuda.is_available() else None, find_unused_parameters=True)
     
     # Train the model
     train(dataloader, model, epochs=10, lr=1e-3, weight_decay=0, gamma=0.999, device=rank)
