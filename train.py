@@ -1,4 +1,4 @@
-import os
+import time # delete me
 import torch
 import torch.nn.functional as F
 
@@ -12,6 +12,7 @@ def train(dataloader, model, epochs, lr, weight_decay, gamma, device):
         epoch_loss = 0
         num_batches = 0
         for road_map, agent_trajectories, unobserved_positions, future_times, target_velocity, agent_mask, flow_field_mask in dataloader:
+            start = time.time() # delete me
             road_map = road_map.to(device)
             agent_trajectories = agent_trajectories.to(device)
             unobserved_positions = unobserved_positions.to(device)
@@ -27,7 +28,9 @@ def train(dataloader, model, epochs, lr, weight_decay, gamma, device):
             target_velocity = target_velocity.view(-1, 2)[flow_field_mask == 1]
 
             loss = F.mse_loss(flow, target_velocity)
-            print(f'Batch {num_batches+1}, Loss: {loss}')
+            end = time.time() # delete me
+            elapsed = end - start # delete me
+            print(f'Batch {num_batches+1}, Loss: {loss}, Time: {elapsed}')
 
             optim.zero_grad()
             loss.backward()

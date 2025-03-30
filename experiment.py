@@ -13,8 +13,8 @@ idx_path = '../idx/validation'
 if should_index:
 	create_idx(tfrecord_path, idx_path)
 
-batch_size = 6
-#batch_size = torch.cuda.device_count() if torch.cuda.is_available() else 1
+PER_DEVICE_BATCH_SIZE = 18
+batch_size = PER_DEVICE_BATCH_SIZE * (torch.cuda.device_count() if torch.cuda.is_available() else 1)
 dataset = WaymoDataset(tfrecord_path, idx_path)
 dataloader = DataLoader(dataset, batch_size=batch_size, collate_fn=lambda x: waymo_collate_fn(x))
 
@@ -26,34 +26,11 @@ occupancy_flow_net = OccupancyFlowNetwork(road_map_image_size=224, trajectory_fe
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print(f'Detected Device: {device}')
 
-#if torch.cuda.device_count() > 1: # TODO: need to be able to produce batches larger than 1 to use nn.DataParallel
-#	print(f'Using data parallelism across {torch.cuda.device_count()} GPUs')
-#	occupancy_flow_net = nn.DataParallel(occupancy_flow_net)
+if torch.cuda.device_count() > 1: # TODO: need to be able to produce batches larger than 1 to use nn.DataParallel
+	print(f'Using data parallelism across {torch.cuda.device_count()} GPUs')
+	occupancy_flow_net = nn.DataParallel(occupancy_flow_net)
 
 occupancy_flow_net = occupancy_flow_net.to(device)
-
-# TODO: DELETE
-road_map, agent_trajectories, \
-unobserved_positions, future_times, target_velocity, \
-agent_mask, flow_field_mask = next(iter(dataloader))
-
-road_map = road_map.to(device)
-agent_trajectories = agent_trajectories.to(device)
-unobserved_positions = unobserved_positions.to(device)
-future_times = future_times.to(device)
-target_velocity = target_velocity.to(device)
-agent_mask = agent_mask.to(device)
-flow_field_mask = flow_field_mask.to(device)
-
-import time
-
-start = time.time()
-embedding = occupancy_flow_net(future_times, unobserved_positions, road_map, agent_trajectories, agent_mask, flow_field_mask)
-end = time.time()
-elapsed = end - start
-print(elapsed)
-
-# END DELETE
 
 train(dataloader, 
 	  occupancy_flow_net, 
