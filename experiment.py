@@ -6,6 +6,7 @@ from model import OccupancyFlowNetwork
 from train import train
 
 should_index = False
+data_parallel = True
 
 tfrecord_path = '../data1/waymo_dataset/uncompressed/tf_example/validation'
 idx_path = '../idx/validation'
@@ -13,8 +14,12 @@ idx_path = '../idx/validation'
 if should_index:
 	create_idx(tfrecord_path, idx_path)
 
-PER_DEVICE_BATCH_SIZE = 18
-batch_size = PER_DEVICE_BATCH_SIZE * (torch.cuda.device_count() if torch.cuda.is_available() else 1)
+# EFFICENCY NOTES:
+#   1. Spline/CDE is slow causing no efficency benifit with batching (without Spline/CDE batching improves efficency)
+#   2. nn.DataParallel makes traing twice as slow instead of 4 times as fast (as would be expected on a system with 4 GPUs)
+
+PER_DEVICE_BATCH_SIZE = 16
+batch_size = PER_DEVICE_BATCH_SIZE * (torch.cuda.device_count() if data_parallel and torch.cuda.is_available() else 1)
 dataset = WaymoDataset(tfrecord_path, idx_path)
 dataloader = DataLoader(dataset, batch_size=batch_size, collate_fn=lambda x: waymo_collate_fn(x))
 
@@ -26,7 +31,7 @@ occupancy_flow_net = OccupancyFlowNetwork(road_map_image_size=224, trajectory_fe
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print(f'Detected Device: {device}')
 
-if torch.cuda.device_count() > 1: # TODO: need to be able to produce batches larger than 1 to use nn.DataParallel
+if data_parallel and torch.cuda.device_count() > 1:
 	print(f'Using data parallelism across {torch.cuda.device_count()} GPUs')
 	occupancy_flow_net = nn.DataParallel(occupancy_flow_net)
 

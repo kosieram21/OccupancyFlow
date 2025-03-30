@@ -11,6 +11,7 @@ def train(dataloader, model, epochs, lr, weight_decay, gamma, device):
     for epoch in range(epochs):
         epoch_loss = 0
         num_batches = 0
+        total_time = 0 # delete me
         for road_map, agent_trajectories, unobserved_positions, future_times, target_velocity, agent_mask, flow_field_mask in dataloader:
             start = time.time() # delete me
             road_map = road_map.to(device)
@@ -30,7 +31,8 @@ def train(dataloader, model, epochs, lr, weight_decay, gamma, device):
             loss = F.mse_loss(flow, target_velocity)
             end = time.time() # delete me
             elapsed = end - start # delete me
-            print(f'Batch {num_batches+1}, Loss: {loss}, Time: {elapsed}')
+            total_time += elapsed
+            print(f'Batch {num_batches+1}, Loss: {loss}, Time: {elapsed}, Total Time: {total_time}')
 
             optim.zero_grad()
             loss.backward()
