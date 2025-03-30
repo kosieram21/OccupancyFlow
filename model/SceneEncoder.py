@@ -15,6 +15,7 @@ class SceneEncoder(nn.Module):
                  token_dim, embedding_dim):
         super(SceneEncoder, self).__init__()
 
+        self.token_dim = token_dim # delete me
         assert embedding_dim % 2 == 0, "embedding_dim must be divisible by 2 for bidirectional GRU"
 
         self.motion_encoder_seq_len = motion_encoder_seq_len
@@ -48,6 +49,7 @@ class SceneEncoder(nn.Module):
     def forward(self, road_map, agent_trajectories, agent_mask=None):
         t = torch.linspace(0., 1., self.motion_encoder_seq_len).to(agent_trajectories)
         agent_tokens = self.motion_encoder(t, agent_trajectories, agent_mask)
+        #agent_tokens = torch.zeros(agent_trajectories.shape[0], agent_trajectories.shape[1], self.token_dim).to(agent_trajectories.device)
         environment_tokens = self.visual_encoder(road_map)
         agent_tokens = self.interaction_transformer1(agent_tokens, agent_mask)
         agent_tokens = agent_tokens + self.fusion_transformer(agent_tokens, environment_tokens, agent_mask)
