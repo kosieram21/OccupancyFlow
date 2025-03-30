@@ -24,14 +24,15 @@ def train(dataloader, model, epochs, lr, weight_decay, gamma, device):
 
             flow = model(future_times, unobserved_positions, road_map, agent_trajectories, agent_mask)
             
-            flow_field_mask = flow_field_mask.view(-1)
-            flow = flow.view(-1, 2)[flow_field_mask == 1]
-            target_velocity = target_velocity.view(-1, 2)[flow_field_mask == 1]
+            #flow_field_mask = flow_field_mask.view(-1)
+            #flow = flow.view(-1, 2)[flow_field_mask == 1]
+            #target_velocity = target_velocity.view(-1, 2)[flow_field_mask == 1]
 
             loss = F.mse_loss(flow, target_velocity)
             end = time.time() # delete me
             elapsed = end - start # delete me
             total_time += elapsed
+            #print(f'Tensor: {agent_trajectories[0,0,0,:]}')
             print(f'Batch {num_batches+1}, Loss: {loss}, Time: {elapsed}, Total Time: {total_time}')
 
             optim.zero_grad()
