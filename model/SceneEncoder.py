@@ -15,30 +15,30 @@ class SceneEncoder(nn.Module):
                  token_dim, embedding_dim):
         super(SceneEncoder, self).__init__()
 
-        self.token_dim = token_dim # delete me
+        #self.token_dim = token_dim # delete me
         assert embedding_dim % 2 == 0, "embedding_dim must be divisible by 2 for bidirectional GRU"
 
-        self.motion_encoder_seq_len = motion_encoder_seq_len
-        self.motion_encoder = CDE(input_dim=trajectory_feature_dim, 
-                                  embedding_dim=token_dim, 
-                                  hidden_dim=motion_encoder_hidden_dim, 
-                                  num_layers=4)
+        #self.motion_encoder_seq_len = motion_encoder_seq_len
+        #self.motion_encoder = CDE(input_dim=trajectory_feature_dim, 
+        #                          embedding_dim=token_dim, 
+        #                          hidden_dim=motion_encoder_hidden_dim, 
+        #                          num_layers=4)
         
         # TODO: need to figure out how to properly configure the Swin-T
         self.visual_encoder = SwinTransformer(img_size=road_map_image_size,
                                               embed_dim=96)
         
-        self.interaction_transformer1 = SelfAttentionTransformer(token_dim=token_dim,
-                                                                 num_layers=4,
-                                                                 num_heads=8)
+        #self.interaction_transformer1 = SelfAttentionTransformer(token_dim=token_dim,
+        #                                                         num_layers=4,
+        #                                                         num_heads=8)
         
-        self.fusion_transformer = CrossAttentionTransformer(token_dim=token_dim,
-                                                            num_layers=4,
-                                                            num_heads=8)
+        #self.fusion_transformer = CrossAttentionTransformer(token_dim=token_dim,
+        #                                                    num_layers=4,
+        #                                                    num_heads=8)
         
-        self.interaction_transformer2 = SelfAttentionTransformer(token_dim=token_dim,
-                                                                 num_layers=4,
-                                                                 num_heads=8)
+        #self.interaction_transformer2 = SelfAttentionTransformer(token_dim=token_dim,
+        #                                                         num_layers=4,
+        #                                                         num_heads=8)
         
         # TODO: What is the appropriate pooling module
         self.pooling_module = GRU(input_dim=token_dim,
@@ -47,12 +47,16 @@ class SceneEncoder(nn.Module):
                                   bidirectional=True)
 
     def forward(self, road_map, agent_trajectories, agent_mask=None):
-        t = torch.linspace(0., 1., self.motion_encoder_seq_len).to(agent_trajectories)
-        agent_tokens = self.motion_encoder(t, agent_trajectories, agent_mask)
+        #t = torch.linspace(0., 1., self.motion_encoder_seq_len).to(agent_trajectories)
+        #agent_tokens = self.motion_encoder(t, agent_trajectories, agent_mask)
+        #agent_mask=None
+        #print(agent_trajectories.shape)
         #agent_tokens = torch.zeros(agent_trajectories.shape[0], agent_trajectories.shape[1], self.token_dim).to(agent_trajectories.device)
         environment_tokens = self.visual_encoder(road_map)
-        agent_tokens = self.interaction_transformer1(agent_tokens, agent_mask)
-        agent_tokens = agent_tokens + self.fusion_transformer(agent_tokens, environment_tokens, agent_mask)
-        agent_tokens = self.interaction_transformer2(agent_tokens, agent_mask)
+        agent_mask = None
+        agent_tokens = environment_tokens
+        #agent_tokens = self.interaction_transformer1(agent_tokens, agent_mask)
+        #agent_tokens = agent_tokens + self.fusion_transformer(agent_tokens, environment_tokens, agent_mask)
+        #agent_tokens = self.interaction_transformer2(agent_tokens, agent_mask)
         embedding = self.pooling_module(agent_tokens, agent_mask)
         return embedding
