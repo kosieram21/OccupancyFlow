@@ -43,10 +43,7 @@ def single_device_train(config):
         flow_field_fourier_features=config.flow_field_fourier_features,
         token_dim=config.token_dim, 
         embedding_dim=config.embedding_dim
-    )
-
-    #model = torch.compile(model) #TODO: can we get compile to work and be fast?
-    model = model.to(device)
+    ).to(device)
 
     train(
         dataloader=dataloader, 
@@ -76,10 +73,7 @@ def distributed_train(rank, world_size, config):
         flow_field_fourier_features=config.flow_field_fourier_features,
         token_dim=config.token_dim, 
         embedding_dim=config.embedding_dim
-    )
-
-    #model = torch.compile(model) #TODO: can we get compile to work and be fast?
-    model.to(rank)
+    ).to(rank)
     model = nn.parallel.DistributedDataParallel(model, device_ids=[rank], find_unused_parameters=True)
     
     train(
@@ -104,7 +98,7 @@ def multi_device_train(config):
 
 if __name__ == "__main__":
     should_index = False
-    data_parallel = True
+    data_parallel = False
     
     config = TrainConfig(
         tfrecord_path='../data1/waymo_dataset/uncompressed/tf_example/validation',
