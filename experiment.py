@@ -34,7 +34,7 @@ def single_device_train(config):
     dataset = WaymoDataset(config.tfrecord_path, config.idx_path)
     dataloader = DataLoader(dataset, batch_size=config.batch_size, collate_fn=lambda x: waymo_collate_fn(x))
 
-    occupancy_flow_net = OccupancyFlowNetwork(
+    model = OccupancyFlowNetwork(
         road_map_image_size=config.road_map_image_size, 
         trajectory_feature_dim=config.trajectory_feature_dim, 
         motion_encoder_hidden_dim=config.motion_encoder_hidden_dim, 
@@ -45,12 +45,12 @@ def single_device_train(config):
         embedding_dim=config.embedding_dim
     )
 
-    #occupancy_flow_net = torch.compile(occupancy_flow_net) #TODO: can we get compile to work and be fast?
-    occupancy_flow_net = occupancy_flow_net.to(device)
+    #model = torch.compile(model) #TODO: can we get compile to work and be fast?
+    model = model.to(device)
 
     train(
         dataloader=dataloader, 
-        model=occupancy_flow_net, 
+        model=model, 
         epochs=config.epochs, 
         lr=config.lr, 
         weight_decay=config.weight_decay, 
@@ -67,7 +67,7 @@ def distributed_train(rank, world_size, config):
     dataset = WaymoDataset(config.tfrecord_path, config.idx_path)
     dataloader = DataLoader(dataset, batch_size=config.batch_size, collate_fn=lambda x: waymo_collate_fn(x))
     
-    occupancy_flow_net = OccupancyFlowNetwork(
+    model = OccupancyFlowNetwork(
         road_map_image_size=config.road_map_image_size, 
         trajectory_feature_dim=config.trajectory_feature_dim, 
         motion_encoder_hidden_dim=config.motion_encoder_hidden_dim, 
@@ -78,15 +78,13 @@ def distributed_train(rank, world_size, config):
         embedding_dim=config.embedding_dim
     )
 
-    #occupancy_flow_net = torch.compile(occupancy_flow_net) #TODO: can we get compile to work and be fast?
-    occupancy_flow_net.to(rank)
-    occupancy_flow_net = nn.parallel.DistributedDataParallel(occupancy_flow_net, 
-                                                             device_ids=[rank], 
-                                                             find_unused_parameters=True)
+    #model = torch.compile(model) #TODO: can we get compile to work and be fast?
+    model.to(rank)
+    model = nn.parallel.DistributedDataParallel(model, device_ids=[rank], find_unused_parameters=True)
     
     train(
         dataloader=dataloader, 
-        model=occupancy_flow_net, 
+        model=model, 
         epochs=config.epochs, 
         lr=config.lr, 
         weight_decay=config.weight_decay, 
