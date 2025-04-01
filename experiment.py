@@ -4,7 +4,6 @@ import torch.nn as nn
 import torch.distributed as dist
 import torch.multiprocessing as mp
 from torch.utils.data import DataLoader
-from torch.utils.data.distributed import DistributedSampler
 from dataclasses import dataclass
 from datasets.Waymo import WaymoDataset, waymo_collate_fn, create_idx
 from model import OccupancyFlowNetwork
@@ -59,9 +58,7 @@ def distributed_train(rank, world_size, config):
     dist.init_process_group(backend='nccl', rank=rank, world_size=world_size)
     torch.cuda.set_device(rank)
 
-    #sampler = DistributedSampler(dataset, num_replicas=world_size, rank=rank) 
-    # TODO: are we even splitting the data correctly without the sampler??
-    dataset = WaymoDataset(config.tfrecord_path, config.idx_path)
+    dataset = WaymoDataset(config.tfrecord_path, config.idx_path, rank, world_size)
     dataloader = DataLoader(dataset, batch_size=config.batch_size, collate_fn=lambda x: waymo_collate_fn(x))
     
     model = OccupancyFlowNetwork(
@@ -98,7 +95,7 @@ def multi_device_train(config):
 
 if __name__ == "__main__":
     should_index = False
-    data_parallel = False
+    data_parallel = True
     
     config = TrainConfig(
         tfrecord_path='../data1/waymo_dataset/uncompressed/tf_example/validation',
@@ -117,6 +114,8 @@ if __name__ == "__main__":
         token_dim=768,
         embedding_dim=128
     )
+
+    print(torch.__version__)
 
     if should_index:
         create_idx(config.tfrecord_path, config.idx_path)
