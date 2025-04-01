@@ -34,23 +34,23 @@ def single_device_train(config):
     dataloader = DataLoader(dataset, batch_size=config.batch_size, collate_fn=lambda x: waymo_collate_fn(x))
 
     model = OccupancyFlowNetwork(
-        road_map_image_size=config.road_map_image_size, 
-        trajectory_feature_dim=config.trajectory_feature_dim, 
-        motion_encoder_hidden_dim=config.motion_encoder_hidden_dim, 
-        motion_encoder_seq_len=config.motion_encoder_seq_len,                                      
-        flow_field_hidden_dim=config.flow_field_hidden_dim, 
+        road_map_image_size=config.road_map_image_size,
+        trajectory_feature_dim=config.trajectory_feature_dim,
+        motion_encoder_hidden_dim=config.motion_encoder_hidden_dim,
+        motion_encoder_seq_len=config.motion_encoder_seq_len,                               
+        flow_field_hidden_dim=config.flow_field_hidden_dim,
         flow_field_fourier_features=config.flow_field_fourier_features,
-        token_dim=config.token_dim, 
+        token_dim=config.token_dim,
         embedding_dim=config.embedding_dim
     ).to(device)
 
     train(
-        dataloader=dataloader, 
-        model=model, 
-        epochs=config.epochs, 
-        lr=config.lr, 
-        weight_decay=config.weight_decay, 
-        gamma=config.gamma, 
+        dataloader=dataloader,
+        model=model,
+        epochs=config.epochs,
+        lr=config.lr,
+        weight_decay=config.weight_decay,
+        gamma=config.gamma,
         device=device
     )
 
@@ -62,13 +62,13 @@ def distributed_train(rank, world_size, config):
     dataloader = DataLoader(dataset, batch_size=config.batch_size, collate_fn=lambda x: waymo_collate_fn(x))
     
     model = OccupancyFlowNetwork(
-        road_map_image_size=config.road_map_image_size, 
-        trajectory_feature_dim=config.trajectory_feature_dim, 
-        motion_encoder_hidden_dim=config.motion_encoder_hidden_dim, 
-        motion_encoder_seq_len=config.motion_encoder_seq_len,                                      
-        flow_field_hidden_dim=config.flow_field_hidden_dim, 
+        road_map_image_size=config.road_map_image_size,
+        trajectory_feature_dim=config.trajectory_feature_dim,
+        motion_encoder_hidden_dim=config.motion_encoder_hidden_dim,
+        motion_encoder_seq_len=config.motion_encoder_seq_len,                          
+        flow_field_hidden_dim=config.flow_field_hidden_dim,
         flow_field_fourier_features=config.flow_field_fourier_features,
-        token_dim=config.token_dim, 
+        token_dim=config.token_dim,
         embedding_dim=config.embedding_dim
     ).to(rank)
     model = nn.parallel.DistributedDataParallel(model, device_ids=[rank], find_unused_parameters=True)
