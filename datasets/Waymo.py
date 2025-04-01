@@ -337,6 +337,9 @@ def get_fov_mask(points):
 
     return fov_mask
 
+def get_grid_size():
+    return GRID_SIZE
+
 def collate_agent_trajectories(data):
     past_positions = np.stack((data['state/past/x'], data['state/past/y']), axis=-1)
     current_position = np.stack((data['state/current/x'], data['state/current/y']), axis=-1)
