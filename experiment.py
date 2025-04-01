@@ -14,6 +14,7 @@ class TrainConfig:
     tfrecord_path: str
     idx_path: str
     batch_size: int
+    batches_per_epoch: int
     epochs: int
     lr: float
     weight_decay: float
@@ -58,32 +59,35 @@ def distributed_train(rank, world_size, config):
     dist.init_process_group(backend='nccl', rank=rank, world_size=world_size)
     torch.cuda.set_device(rank)
 
-    dataset = WaymoDataset(config.tfrecord_path, config.idx_path, rank, world_size)
-    dataloader = DataLoader(dataset, batch_size=config.batch_size, collate_fn=lambda x: waymo_collate_fn(x))
+    try:
+        dataset = WaymoDataset(config.tfrecord_path, config.idx_path, rank, world_size)
+        dataloader = DataLoader(dataset, batch_size=config.batch_size, collate_fn=lambda x: waymo_collate_fn(x))
     
-    model = OccupancyFlowNetwork(
-        road_map_image_size=config.road_map_image_size,
-        trajectory_feature_dim=config.trajectory_feature_dim,
-        motion_encoder_hidden_dim=config.motion_encoder_hidden_dim,
-        motion_encoder_seq_len=config.motion_encoder_seq_len,                          
-        flow_field_hidden_dim=config.flow_field_hidden_dim,
-        flow_field_fourier_features=config.flow_field_fourier_features,
-        token_dim=config.token_dim,
-        embedding_dim=config.embedding_dim
-    ).to(rank)
-    model = nn.parallel.DistributedDataParallel(model, device_ids=[rank], find_unused_parameters=True)
+        model = OccupancyFlowNetwork(
+            road_map_image_size=config.road_map_image_size,
+            trajectory_feature_dim=config.trajectory_feature_dim,
+            motion_encoder_hidden_dim=config.motion_encoder_hidden_dim,
+            motion_encoder_seq_len=config.motion_encoder_seq_len,                          
+            flow_field_hidden_dim=config.flow_field_hidden_dim,
+            flow_field_fourier_features=config.flow_field_fourier_features,
+            token_dim=config.token_dim,
+            embedding_dim=config.embedding_dim
+        ).to(rank)
+        model = nn.parallel.DistributedDataParallel(model, device_ids=[rank], find_unused_parameters=True)
     
-    train(
-        dataloader=dataloader, 
-        model=model, 
-        epochs=config.epochs, 
-        lr=config.lr, 
-        weight_decay=config.weight_decay, 
-        gamma=config.gamma, 
-        device=rank
-    )
+        train(
+            dataloader=dataloader, 
+            model=model, 
+            epochs=config.epochs, 
+            lr=config.lr, 
+            weight_decay=config.weight_decay, 
+            gamma=config.gamma, 
+            device=rank,
+            batches_per_epoch=config.batches_per_epoch
+        )
     
-    dist.destroy_process_group()
+    finally:
+        dist.destroy_process_group()
 
 def multi_device_train(config):
     os.environ['MASTER_ADDR'] = 'localhost'
@@ -100,9 +104,10 @@ if __name__ == "__main__":
     config = TrainConfig(
         tfrecord_path='../data1/waymo_dataset/uncompressed/tf_example/validation',
         idx_path='../idx/validation',
-        batch_size=16,
-        epochs=10,
-        lr=1e-3,
+        batch_size=6,#14,
+        batches_per_epoch=4,#1000,
+        epochs=1000,#10,
+        lr=1e-4,#1e-3,
         weight_decay=0,
         gamma=0.999,
         road_map_image_size=224,
@@ -112,7 +117,7 @@ if __name__ == "__main__":
         flow_field_hidden_dim=512,
         flow_field_fourier_features=128,
         token_dim=768,
-        embedding_dim=128
+        embedding_dim=1024#128
     )
 
     if should_index:

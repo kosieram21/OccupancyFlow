@@ -353,17 +353,19 @@ def collate_agent_trajectories(data):
     centered_and_rotated_image_observed_positions = get_image_coordinates(centered_and_rotated_observed_positions)
     fov_mask = get_fov_mask(centered_and_rotated_image_observed_positions)
 
-    observed_positions = centered_and_rotated_observed_positions.reshape(max_agents, timesteps, xy)
+    #observed_positions = centered_and_rotated_observed_positions.reshape(max_agents, timesteps, xy)
+    observed_positions = centered_and_rotated_image_observed_positions.reshape(max_agents, timesteps, xy) / GRID_SIZE
     fov_mask = fov_mask.reshape(max_agents, timesteps)
 
     past_velocity = np.stack((data['state/past/velocity_x'], data['state/past/velocity_y']), axis=-1)
     past_velocity = rotate_points_around_origin(past_velocity, angle)
-    past_bbox_yaw = -data['state/past/bbox_yaw'] - angle
+    past_velocity = get_image_velocity(past_velocity) / GRID_SIZE
+    past_bbox_yaw = -data['state/past/bbox_yaw'] - angle # normalize yaw?
     past_vel_yaw = -data['state/past/vel_yaw'] - angle
     past_states = np.stack((
         past_bbox_yaw, 
-        data['state/past/width'], 
-        data['state/past/length'],
+        data['state/past/width'] * (PIXELS_PER_METER / GRID_SIZE), 
+        data['state/past/length'] * (PIXELS_PER_METER / GRID_SIZE),
         past_vel_yaw, 
         past_velocity[:, :, 0],
         past_velocity[:, :, 1],
@@ -373,12 +375,13 @@ def collate_agent_trajectories(data):
 
     current_velocity = np.stack((data['state/current/velocity_x'], data['state/current/velocity_y']), axis=-1)
     current_velocity = rotate_points_around_origin(current_velocity, angle)
+    current_velocity = get_image_velocity(current_velocity) / GRID_SIZE
     current_bbox_yaw = -data['state/current/bbox_yaw'] - angle
     current_vel_yaw = -data['state/current/vel_yaw'] - angle
     current_states = np.stack((
         current_bbox_yaw, 
-        data['state/current/width'], 
-        data['state/current/length'],
+        data['state/current/width'] * (PIXELS_PER_METER / GRID_SIZE), 
+        data['state/current/length'] * (PIXELS_PER_METER / GRID_SIZE),
         current_vel_yaw, 
         current_velocity[:, :, 0],
         current_velocity[:, :, 1],
@@ -582,6 +585,9 @@ def collate_target_flow_field(data):
     for i in range(unobserved_positions.shape[0]):
         unobserved_positions[i] = rotate_points_around_origin(unobserved_positions[i], -bbox_yaw[i] - angle)
     unobserved_positions = unobserved_positions + agent_centers
+
+    unobserved_positions = get_image_coordinates(unobserved_positions) / GRID_SIZE
+    future_velocity = get_image_velocity(future_velocity) / GRID_SIZE
 
     return torch.FloatTensor(unobserved_positions), torch.FloatTensor(future_times), torch.FloatTensor(future_velocity)
 
