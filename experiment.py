@@ -115,8 +115,6 @@ if __name__ == "__main__":
         embedding_dim=128
     )
 
-    print(torch.__version__)
-
     if should_index:
         create_idx(config.tfrecord_path, config.idx_path)
 
