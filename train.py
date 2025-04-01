@@ -1,19 +1,29 @@
-import time # delete me
+import itertools
 import torch
 import torch.nn.functional as F
 
-def train(dataloader, model, epochs, lr, weight_decay, gamma, device):
+def train(dataloader, model, epochs, lr, weight_decay, gamma, device, batches_per_epoch=None):
     model.train()
 
     optim = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optim, gamma=gamma)
 
+    if batches_per_epoch is not None:
+        #data_iter = itertools.cycle(dataloader)
+        #batch_generator = lambda: (next(data_iter) for _ in range(batches_per_epoch))
+        batches = [next(iter(dataloader)) for _ in range(batches_per_epoch)]
+        batch_generator = lambda: (batch for batch in batches)
+    else:
+        batch_generator = lambda: (batch for batch in dataloader)
+
     for epoch in range(epochs):
         epoch_loss = 0
         num_batches = 0
-        total_time = 0 # delete me
-        for road_map, agent_trajectories, unobserved_positions, future_times, target_velocity, agent_mask, flow_field_mask in dataloader:
-            start = time.time() # delete me
+
+        for batch in batch_generator():
+            road_map, agent_trajectories, unobserved_positions, future_times, \
+            target_velocity, agent_mask, flow_field_mask = batch
+
             road_map = road_map.to(device)
             agent_trajectories = agent_trajectories.to(device)
             unobserved_positions = unobserved_positions.to(device)
@@ -29,10 +39,7 @@ def train(dataloader, model, epochs, lr, weight_decay, gamma, device):
             target_velocity = target_velocity.view(-1, 2)[flow_field_mask == 1]
 
             loss = F.mse_loss(flow, target_velocity)
-            end = time.time() # delete me
-            elapsed = end - start # delete me
-            total_time += elapsed
-            print(f'Batch {num_batches+1}, Loss: {loss}, Time: {elapsed}, Total Time: {total_time}')
+            #print(f'Batch {num_batches+1}, Loss: {loss}')
 
             optim.zero_grad()
             loss.backward()

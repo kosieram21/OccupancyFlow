@@ -14,7 +14,8 @@ def render_observed_scene_state(road_map, agent_trajectories):
 
     agent_cmap = ['blue', 'orange', 'yellow', 'purple']
 
-    trajectories = get_image_coordinates(agent_trajectories[:,:,:2])
+    #trajectories = get_image_coordinates(agent_trajectories[:,:,:2])
+    trajectories = agent_trajectories[:,:,:2] * 224 # pass in grid size
     for agent in range(trajectories.shape[0]):
         agent_trajectory = trajectories[agent, :, :]
         agent_type = agent_trajectories[agent,-1,-1].item()
@@ -51,8 +52,10 @@ def render_flow_field(road_map, times, positions, velocity):
         time = list(sorted_keys)[frame]
         indices = groups[time]
     
-        group_positions = get_image_coordinates(positions[indices])
-        group_velocity = get_image_velocity(velocity[indices])
+        #group_positions = get_image_coordinates(positions[indices])
+        #group_velocity = get_image_velocity(velocity[indices])
+        group_positions = positions[indices] * 224
+        group_velocity = velocity[indices] * 224
 
         ax.set_title(f"Future Flow (t = {time}s)")
     
