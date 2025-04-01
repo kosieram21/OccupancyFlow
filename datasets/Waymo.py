@@ -257,11 +257,16 @@ def create_idx(tfrecord_dir, idx_dir):
         idxname = idx_dir + '/' + tfrecord.split('/')[-1]
         call(["tfrecord2idx", tfrecord, idxname])
 
-def WaymoDataset(tfrecord_dir, idx_dir):
+def WaymoDataset(tfrecord_dir, idx_dir, fold=0, num_folds=1):
     tfrecord_pattern = tfrecord_dir+'/{}'
     index_pattern = idx_dir+'/{}'
     fnlist = os.listdir(tfrecord_pattern.split('{}')[0])
-    splits = {fn: 1/len(fnlist) for fn in fnlist}
+    num_records = len(fnlist)
+    fold_size = num_records // num_folds
+    remainder = num_records % num_folds
+    start = fold_size * fold + min(fold, remainder)
+    end = fold_size * (fold + 1) + min(fold + 1, remainder)
+    splits = {fn: 1/len(fnlist) for fn in fnlist[start:end]}
     dataset = MultiTFRecordDataset(tfrecord_pattern, index_pattern, splits, description=features_description, transform=transform, infinite=False)
     return dataset
 
