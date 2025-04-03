@@ -66,7 +66,7 @@ def distributed_train(rank, world_size, config, experiment_id):
         name=f"rank{rank}",
         group=f"exp-{experiment_id[:8]}",
         config=config.__dict__,
-        id=experiment_id,
+        id=f"{experiment_id}-{rank}",
         resume="never"
     )
 
