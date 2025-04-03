@@ -35,6 +35,13 @@ class TrainConfig:
 def single_device_train(config):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+    experiment_id = str(uuid.uuid4())
+    wandb.init(
+        project="occupancy-flow",
+        name=experiment_id,
+        config=config.__dict__
+    )
+
     dataset = WaymoDataset(config.tfrecord_path, config.idx_path)
     dataloader = DataLoader(dataset, batch_size=config.batch_size, collate_fn=lambda x: waymo_collate_fn(x))
 
@@ -58,7 +65,8 @@ def single_device_train(config):
         lr=config.lr,
         weight_decay=config.weight_decay,
         gamma=config.gamma,
-        device=device
+        device=device,
+        should_log=True
     )
 
 def distributed_train(rank, world_size, config, experiment_id):
@@ -67,11 +75,9 @@ def distributed_train(rank, world_size, config, experiment_id):
 
     wandb.init(
         project="occupancy-flow", 
-        name=f"rank{rank}",
-        group=f"exp-{experiment_id[:8]}",
+        name=f"{experiment_id}-{rank}",
         config=config.__dict__,
-        id=f"{experiment_id}-{rank}",
-        resume="never"
+        mode="online" if rank == 0 else "disabled"
     )
 
     try:
@@ -100,6 +106,7 @@ def distributed_train(rank, world_size, config, experiment_id):
             weight_decay=config.weight_decay, 
             gamma=config.gamma, 
             device=rank,
+            should_log=rank==0,
             batches_per_epoch=config.batches_per_epoch
         )
     

@@ -2,8 +2,18 @@ import itertools
 import wandb
 import torch
 import torch.nn.functional as F
+import torch.distributed as dist
 
-def train(dataloader, model, epochs, lr, weight_decay, gamma, device, batches_per_epoch=None):
+def aggregate_loss(loss):
+    total_loss = loss.clone()
+
+    if dist.is_initialized():
+        dist.all_reduce(total_loss, op=dist.ReduceOp.SUM)
+        total_loss /= dist.get_world_size()
+
+    return total_loss.item()
+
+def train(dataloader, model, epochs, lr, weight_decay, gamma, device, should_log=False, batches_per_epoch=None):
     model.train()
 
     optim = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
@@ -13,10 +23,13 @@ def train(dataloader, model, epochs, lr, weight_decay, gamma, device, batches_pe
         data_iter = itertools.cycle(dataloader)
         batch_generator = lambda: (next(data_iter) for _ in range(batches_per_epoch))
     else:
-        batch_generator = lambda: (batch for batch in dataloader)
+        #batch_generator = lambda: (batch for batch in dataloader)
+        batches = [next(iter(dataloader))]
+        batch_generator = lambda: (batch for batch in batches)
 
+    total_batches = 0
     for epoch in range(epochs):
-        epoch_loss = 0
+        epoch_loss = torch.tensor(0.0, device=device)
         num_batches = 0
 
         for batch in batch_generator():
@@ -38,17 +51,25 @@ def train(dataloader, model, epochs, lr, weight_decay, gamma, device, batches_pe
             target_velocity = target_velocity.view(-1, 2)[flow_field_mask == 1]
 
             loss = F.mse_loss(flow, target_velocity)
-            wandb.log({f'device{device} batch loss': loss})
-            print(f'Batch {num_batches+1}, Loss: {loss:.6f}')
+            total_loss = aggregate_loss(loss.detach())
+
+            if should_log:
+                wandb.log({f'batch loss': total_loss}, step=total_batches)
+                print(f'Batch {total_batches+1}, Loss: {total_loss:.6f}')
 
             optim.zero_grad()
             loss.backward()
             optim.step()
 
-            epoch_loss += loss.item()
+            epoch_loss += loss.detach()
             num_batches += 1
+            total_batches += 1
 
         scheduler.step()
+
         avg_loss = epoch_loss / num_batches
-        wandb.log({f'device{device} epoch loss': avg_loss})
-        print(f'Device: {device}, Epoch: {epoch+1}/{epochs}, Loss: {avg_loss:.6f}, LR: {scheduler.get_last_lr()[0]:.6f}')
+        total_avg_loss = aggregate_loss(avg_loss)
+        
+        if should_log:
+            wandb.log({f'epoch loss': total_avg_loss}, step=epoch)
+            print(f'Epoch: {epoch+1}/{epochs}, Loss: {total_avg_loss:.6f}, LR: {scheduler.get_last_lr()[0]:.6f}')
