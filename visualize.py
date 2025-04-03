@@ -3,7 +3,7 @@ import torch
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from collections import defaultdict
-from datasets.Waymo import get_grid_size, get_image_coordinates, get_image_velocity
+from datasets.Waymo import get_image_coordinates, get_image_velocity
 
 def render_observed_scene_state(road_map, agent_trajectories):
     image_buffer = road_map.numpy() / 255.0
@@ -15,7 +15,6 @@ def render_observed_scene_state(road_map, agent_trajectories):
     agent_cmap = ['blue', 'orange', 'yellow', 'purple']
 
     trajectories = get_image_coordinates(agent_trajectories[:,:,:2])
-    #trajectories = agent_trajectories[:,:,:2] * get_grid_size()
     for agent in range(trajectories.shape[0]):
         agent_trajectory = trajectories[agent, :, :]
         agent_type = agent_trajectories[agent,-1,-1].item()
@@ -54,8 +53,6 @@ def render_flow_field(road_map, times, positions, velocity):
     
         group_positions = get_image_coordinates(positions[indices])
         group_velocity = get_image_velocity(velocity[indices])
-        #group_positions = positions[indices] * get_grid_size()
-        #group_velocity = velocity[indices] * get_grid_size()
 
         ax.set_title(f"Future Flow (t = {time}s)")
     

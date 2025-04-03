@@ -104,10 +104,10 @@ if __name__ == "__main__":
     config = TrainConfig(
         tfrecord_path='../data1/waymo_dataset/uncompressed/tf_example/validation',
         idx_path='../idx/validation',
-        batch_size=1,#14,
-        batches_per_epoch=6,#4,,#1000,
+        batch_size=14,
+        batches_per_epoch=6,#1000,
         epochs=1000,
-        lr=1e-3,#1e-4,
+        lr=1e-3,
         weight_decay=0,
         gamma=0.999,
         road_map_image_size=224,
@@ -117,7 +117,7 @@ if __name__ == "__main__":
         flow_field_hidden_dim=512,
         flow_field_fourier_features=128,
         token_dim=768,
-        embedding_dim=1024#128
+        embedding_dim=1024
     )
 
     if should_index:
