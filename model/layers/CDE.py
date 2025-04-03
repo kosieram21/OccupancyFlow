@@ -54,7 +54,7 @@ class CDE(nn.Module):
 		spline = NaturalCubicSpline(t, x)
 		vector_field = VectorField(dX_dt=spline.derivative, f=self.f)
 		z0 = self.embed(spline.evaluate(t[0]))
-		out = odeint_adjoint(vector_field, z0, t, method='rk4', atol=1e-3, rtol=1e-3)
+		out = odeint_adjoint(vector_field, z0, t, method='dopri5', atol=1e-5, rtol=1e-5)
 
 		if mask is not None:
 			embedding[[i for i, j in indicies], [j for i, j in indicies]] = out[-1]

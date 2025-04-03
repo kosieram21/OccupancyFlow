@@ -137,7 +137,7 @@ if __name__ == "__main__":
         idx_path='../idx/validation',
         batch_size=10,
         batches_per_epoch=6,#1000,
-        epochs=1000,
+        epochs=1000,#100
         lr=1e-3,
         weight_decay=0,
         gamma=0.999,
