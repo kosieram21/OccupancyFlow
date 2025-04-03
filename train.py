@@ -1,3 +1,4 @@
+import os
 import itertools
 import wandb
 import torch
@@ -13,7 +14,8 @@ def aggregate_loss(loss):
 
     return total_loss.item()
 
-def train(dataloader, model, epochs, lr, weight_decay, gamma, device, should_log=False, batches_per_epoch=None):
+def train(dataloader, model, epochs, lr, weight_decay, gamma, device, 
+          logging_enabled=False, checkpointing_enabled=False, batches_per_epoch=None):
     model.train()
 
     optim = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
@@ -51,7 +53,7 @@ def train(dataloader, model, epochs, lr, weight_decay, gamma, device, should_log
             loss = F.mse_loss(flow, target_velocity)
             total_loss = aggregate_loss(loss.detach())
 
-            if should_log:
+            if logging_enabled:
                 wandb.log({f'batch loss': total_loss}, step=total_batches)
                 print(f'Batch {total_batches+1}, Loss: {total_loss:.6f}')
 
@@ -68,6 +70,10 @@ def train(dataloader, model, epochs, lr, weight_decay, gamma, device, should_log
         avg_loss = epoch_loss / num_batches
         total_avg_loss = aggregate_loss(avg_loss)
         
-        if should_log:
+        if logging_enabled:
             wandb.log({f'epoch loss': total_avg_loss}, step=epoch)
             print(f'Epoch: {epoch+1}/{epochs}, Loss: {total_avg_loss:.6f}, LR: {scheduler.get_last_lr()[0]:.6f}')
+
+        if checkpointing_enabled:
+            os.makedirs('checkpoints', exist_ok=True)
+            torch.save(model.state_dict(), os.path.join('checkpoints', f'occupancy_flow_checkpoint{epoch}.pt'))
