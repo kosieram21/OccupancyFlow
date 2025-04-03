@@ -30,6 +30,8 @@ def train(dataloader, model, epochs, lr, weight_decay, gamma, device,
     if logging_enabled:
         wandb.define_metric("batch loss", step_metric="batch")
         wandb.define_metric("epoch loss", step_metric="epoch")
+        wandb.define_metric("batch", hidden=True)
+        wandb.define_metric("epoch", hidden=True)
 
     total_batches = 0
     for epoch in range(epochs):
