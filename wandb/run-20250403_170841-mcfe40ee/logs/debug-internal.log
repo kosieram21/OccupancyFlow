@@ -1,0 +1,15 @@
+{"time":"2025-04-03T17:08:41.185284194Z","level":"INFO","msg":"stream: starting","core version":"0.19.9","symlink path":"/home/kosie011/OccupancyFlow/wandb/run-20250403_170841-mcfe40ee/logs/debug-core.log"}
+{"time":"2025-04-03T17:08:41.363581503Z","level":"INFO","msg":"created new stream","id":"mcfe40ee"}
+{"time":"2025-04-03T17:08:41.363602574Z","level":"INFO","msg":"stream: started","id":"mcfe40ee"}
+{"time":"2025-04-03T17:08:41.363610034Z","level":"INFO","msg":"handler: started","stream_id":"mcfe40ee"}
+{"time":"2025-04-03T17:08:41.363618555Z","level":"INFO","msg":"sender: started","stream_id":"mcfe40ee"}
+{"time":"2025-04-03T17:08:41.363640636Z","level":"INFO","msg":"writer: Do: started","stream_id":"mcfe40ee"}
+{"time":"2025-04-03T17:08:41.4891996Z","level":"INFO","msg":"Starting system monitor"}
+{"time":"2025-04-03T17:14:14.17512994Z","level":"INFO","msg":"stream: closing","id":"mcfe40ee"}
+{"time":"2025-04-03T17:14:14.175222404Z","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2025-04-03T17:14:14.175274847Z","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2025-04-03T17:14:14.522331317Z","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-04-03T17:14:14.625420004Z","level":"INFO","msg":"handler: closed","stream_id":"mcfe40ee"}
+{"time":"2025-04-03T17:14:14.625481847Z","level":"INFO","msg":"writer: Close: closed","stream_id":"mcfe40ee"}
+{"time":"2025-04-03T17:14:14.625509288Z","level":"INFO","msg":"sender: closed","stream_id":"mcfe40ee"}
+{"time":"2025-04-03T17:14:14.625615843Z","level":"INFO","msg":"stream: closed","id":"mcfe40ee"}

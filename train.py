@@ -1,4 +1,5 @@
 import itertools
+import wandb
 import torch
 import torch.nn.functional as F
 
@@ -37,7 +38,8 @@ def train(dataloader, model, epochs, lr, weight_decay, gamma, device, batches_pe
             target_velocity = target_velocity.view(-1, 2)[flow_field_mask == 1]
 
             loss = F.mse_loss(flow, target_velocity)
-            print(f'Batch {num_batches+1}, Loss: {loss}')
+            wandb.log({f'device{device} batch loss': loss})
+            print(f'Batch {num_batches+1}, Loss: {loss:.6f}')
 
             optim.zero_grad()
             loss.backward()
@@ -48,4 +50,5 @@ def train(dataloader, model, epochs, lr, weight_decay, gamma, device, batches_pe
 
         scheduler.step()
         avg_loss = epoch_loss / num_batches
-        print(f'Epoch {epoch+1}/{epochs}, Loss: {avg_loss:.6f}, LR: {scheduler.get_last_lr()[0]:.6f}')
+        wandb.log({f'device{device} epoch loss': avg_loss})
+        print(f'Device: {device}, Epoch: {epoch+1}/{epochs}, Loss: {avg_loss:.6f}, LR: {scheduler.get_last_lr()[0]:.6f}')

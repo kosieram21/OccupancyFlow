@@ -1,0 +1,15 @@
+{"time":"2025-04-03T17:08:41.741946899Z","level":"INFO","msg":"stream: starting","core version":"0.19.9","symlink path":"/home/kosie011/OccupancyFlow/wandb/run-20250403_170841-gvgtv1bn/logs/debug-core.log"}
+{"time":"2025-04-03T17:08:41.813856355Z","level":"INFO","msg":"created new stream","id":"gvgtv1bn"}
+{"time":"2025-04-03T17:08:41.813898627Z","level":"INFO","msg":"stream: started","id":"gvgtv1bn"}
+{"time":"2025-04-03T17:08:41.813918068Z","level":"INFO","msg":"writer: Do: started","stream_id":"gvgtv1bn"}
+{"time":"2025-04-03T17:08:41.813932079Z","level":"INFO","msg":"handler: started","stream_id":"gvgtv1bn"}
+{"time":"2025-04-03T17:08:41.813943619Z","level":"INFO","msg":"sender: started","stream_id":"gvgtv1bn"}
+{"time":"2025-04-03T17:08:41.96058495Z","level":"INFO","msg":"Starting system monitor"}
+{"time":"2025-04-03T17:14:14.17493947Z","level":"INFO","msg":"stream: closing","id":"gvgtv1bn"}
+{"time":"2025-04-03T17:14:14.174992183Z","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2025-04-03T17:14:14.175245585Z","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2025-04-03T17:14:14.52136931Z","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-04-03T17:14:14.615051569Z","level":"INFO","msg":"handler: closed","stream_id":"gvgtv1bn"}
+{"time":"2025-04-03T17:14:14.615122822Z","level":"INFO","msg":"sender: closed","stream_id":"gvgtv1bn"}
+{"time":"2025-04-03T17:14:14.615105201Z","level":"INFO","msg":"writer: Close: closed","stream_id":"gvgtv1bn"}
+{"time":"2025-04-03T17:14:14.615298731Z","level":"INFO","msg":"stream: closed","id":"gvgtv1bn"}
