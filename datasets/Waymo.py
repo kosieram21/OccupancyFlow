@@ -10,10 +10,10 @@ from subprocess import call
 from tqdm import tqdm
 
 PIXELS_PER_METER = 3.2
-SDC_X_IN_GRID = 112 #512
-SDC_Y_IN_GRID = 112 #512
+SDC_X_IN_GRID = 128
+SDC_Y_IN_GRID = 128
 
-GRID_SIZE = 224 #1024
+GRID_SIZE = 256
 PADDING = 0
 
 DPI = 1
