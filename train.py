@@ -23,9 +23,7 @@ def train(dataloader, model, epochs, lr, weight_decay, gamma, device, should_log
         data_iter = itertools.cycle(dataloader)
         batch_generator = lambda: (next(data_iter) for _ in range(batches_per_epoch))
     else:
-        #batch_generator = lambda: (batch for batch in dataloader)
-        batches = [next(iter(dataloader))]
-        batch_generator = lambda: (batch for batch in batches)
+        batch_generator = lambda: (batch for batch in dataloader)
 
     total_batches = 0
     for epoch in range(epochs):
