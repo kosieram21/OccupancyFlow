@@ -13,6 +13,8 @@ from train import train
 
 @dataclass
 class TrainConfig:
+    logging_enabled: bool
+    checkpointing_enabled: bool
     tfrecord_path: str
     idx_path: str
     batch_size: int
@@ -66,7 +68,8 @@ def single_device_train(config):
         weight_decay=config.weight_decay,
         gamma=config.gamma,
         device=device,
-        should_log=True
+        logging_enabled=config.logging_enabled,
+        checkpointing_enabled=config.checkpointing_enabled
     )
 
 def distributed_train(rank, world_size, config, experiment_id):
@@ -106,7 +109,8 @@ def distributed_train(rank, world_size, config, experiment_id):
             weight_decay=config.weight_decay, 
             gamma=config.gamma, 
             device=rank,
-            should_log=rank==0,
+            logging_enabled=config.logging_enabled and rank==0,
+            checkpointing_enabled=config.checkpointing_enabled,
             batches_per_epoch=config.batches_per_epoch
         )
     
@@ -127,11 +131,13 @@ if __name__ == "__main__":
     data_parallel = True
     
     config = TrainConfig(
+        logging_enabled=True,
+        checkpointing_enabled=True,
         tfrecord_path='../data1/waymo_dataset/uncompressed/tf_example/validation',
         idx_path='../idx/validation',
         batch_size=14,
-        batches_per_epoch=1,#1000,
-        epochs=10,#1000,
+        batches_per_epoch=12,#1000,
+        epochs=1000,
         lr=1e-3,
         weight_decay=0,
         gamma=0.999,
