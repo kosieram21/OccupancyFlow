@@ -1,4 +1,3 @@
-import torch
 import torch.nn as nn
 from model.layers.ODE import ODE
 from model.SceneEncoder import SceneEncoder
