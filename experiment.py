@@ -87,12 +87,12 @@ def distributed_train(rank, world_size, config):
         )
     
     finally:
+        dist.barrier()
         dist.destroy_process_group()
 
 def multi_device_train(config):
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '12355'
-    os.environ['TORCH_DISTRIBUTED_DEBUG'] = 'DETAIL'
 
     world_size = torch.cuda.device_count()
     mp.spawn(distributed_train, args=(world_size, config,), nprocs=world_size, join=True)
@@ -105,8 +105,8 @@ if __name__ == "__main__":
         tfrecord_path='../data1/waymo_dataset/uncompressed/tf_example/validation',
         idx_path='../idx/validation',
         batch_size=14,
-        batches_per_epoch=6,#1000,
-        epochs=1000,
+        batches_per_epoch=1,#1000,
+        epochs=1,#1000,
         lr=1e-3,
         weight_decay=0,
         gamma=0.999,
