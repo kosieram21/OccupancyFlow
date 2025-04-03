@@ -1,4 +1,6 @@
 import os
+import uuid
+import wandb
 import torch
 import torch.nn as nn
 import torch.distributed as dist
@@ -55,9 +57,18 @@ def single_device_train(config):
         device=device
     )
 
-def distributed_train(rank, world_size, config):
+def distributed_train(rank, world_size, config, experiment_id):
     dist.init_process_group(backend='nccl', rank=rank, world_size=world_size)
     torch.cuda.set_device(rank)
+
+    wandb.init(
+        project="occupancy-flow", 
+        name=f"rank{rank}",
+        group=f"exp-{experiment_id[:8]}",
+        config=config.__dict__,
+        id=experiment_id,
+        resume="never"
+    )
 
     try:
         dataset = WaymoDataset(config.tfrecord_path, config.idx_path, rank, world_size)
@@ -95,7 +106,8 @@ def multi_device_train(config):
     os.environ['MASTER_PORT'] = '12355'
 
     world_size = torch.cuda.device_count()
-    mp.spawn(distributed_train, args=(world_size, config,), nprocs=world_size, join=True)
+    experiment_id = str(uuid.uuid4())
+    mp.spawn(distributed_train, args=(world_size, config, experiment_id,), nprocs=world_size, join=True)
 
 if __name__ == "__main__":
     should_index = False
@@ -106,7 +118,7 @@ if __name__ == "__main__":
         idx_path='../idx/validation',
         batch_size=14,
         batches_per_epoch=1,#1000,
-        epochs=1,#1000,
+        epochs=10,#1000,
         lr=1e-3,
         weight_decay=0,
         gamma=0.999,
@@ -122,6 +134,8 @@ if __name__ == "__main__":
 
     if should_index:
         create_idx(config.tfrecord_path, config.idx_path)
+
+    wandb.login()
 
     if torch.cuda.is_available() and data_parallel:
         multi_device_train(config)
