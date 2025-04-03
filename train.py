@@ -75,5 +75,6 @@ def train(dataloader, model, epochs, lr, weight_decay, gamma, device,
             print(f'Epoch: {epoch+1}/{epochs}, Loss: {total_avg_loss:.6f}, LR: {scheduler.get_last_lr()[0]:.6f}')
 
         if checkpointing_enabled:
-            os.makedirs('checkpoints', exist_ok=True)
-            torch.save(model.state_dict(), os.path.join('checkpoints', f'occupancy_flow_checkpoint{epoch}.pt'))
+            checkpoint_root = 'checkpoints'
+            os.makedirs(checkpoint_root, exist_ok=True)
+            torch.save(model.state_dict(), os.path.join(checkpoint_root, f'occupancy_flow_checkpoint{epoch}.pt'))
