@@ -7,14 +7,15 @@ from model.layers import SelfAttentionTransformer
 from model.layers import CrossAttentionTransformer
 from model.layers import SwinTransformer
 
-# TODO: need to work on encoder model inputs
 class SceneEncoder(nn.Module):
     def __init__(self, 
                  road_map_image_size, trajectory_feature_dim, 
                  motion_encoder_hidden_dim, motion_encoder_seq_len,
+                 visual_encoder_hidden_dim, visual_encoder_window_size,
                  token_dim, embedding_dim):
         super(SceneEncoder, self).__init__()
 
+        assert road_map_image_size % visual_encoder_window_size == 0, "road_map_image_size must be divisible by visual_encoder_window_size"
         assert embedding_dim % 2 == 0, "embedding_dim must be divisible by 2 for bidirectional GRU"
 
         self.motion_encoder_seq_len = motion_encoder_seq_len
@@ -23,9 +24,9 @@ class SceneEncoder(nn.Module):
                                   hidden_dim=motion_encoder_hidden_dim, 
                                   num_layers=4)
         
-        # TODO: need to figure out how to properly configure the Swin-T
         self.visual_encoder = SwinTransformer(img_size=road_map_image_size,
-                                              embed_dim=96)
+                                              embed_dim=visual_encoder_hidden_dim,
+                                              window_size=visual_encoder_window_size)
         
         self.interaction_transformer1 = SelfAttentionTransformer(token_dim=token_dim,
                                                                  num_layers=4,
@@ -39,7 +40,6 @@ class SceneEncoder(nn.Module):
                                                                  num_layers=4,
                                                                  num_heads=8)
         
-        # TODO: What is the appropriate pooling module
         self.pooling_module = GRU(input_dim=token_dim,
                                   hidden_dim=embedding_dim // 2,
                                   num_layers=4,

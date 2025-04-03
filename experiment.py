@@ -25,6 +25,8 @@ class TrainConfig:
     trajectory_feature_dim: int
     motion_encoder_hidden_dim: int
     motion_encoder_seq_len: int
+    visual_encoder_hidden_dim: int 
+    visual_encoder_window_size: int
     flow_field_hidden_dim: int
     flow_field_fourier_features: int
     token_dim: int
@@ -40,7 +42,9 @@ def single_device_train(config):
         road_map_image_size=config.road_map_image_size,
         trajectory_feature_dim=config.trajectory_feature_dim,
         motion_encoder_hidden_dim=config.motion_encoder_hidden_dim,
-        motion_encoder_seq_len=config.motion_encoder_seq_len,                               
+        motion_encoder_seq_len=config.motion_encoder_seq_len, 
+        visual_encoder_hidden_dim=config.visual_encoder_hidden_dim,
+        visual_encoder_window_size=config.visual_encoder_window_size,                            
         flow_field_hidden_dim=config.flow_field_hidden_dim,
         flow_field_fourier_features=config.flow_field_fourier_features,
         token_dim=config.token_dim,
@@ -78,7 +82,9 @@ def distributed_train(rank, world_size, config, experiment_id):
             road_map_image_size=config.road_map_image_size,
             trajectory_feature_dim=config.trajectory_feature_dim,
             motion_encoder_hidden_dim=config.motion_encoder_hidden_dim,
-            motion_encoder_seq_len=config.motion_encoder_seq_len,                          
+            motion_encoder_seq_len=config.motion_encoder_seq_len, 
+            visual_encoder_hidden_dim=config.visual_encoder_hidden_dim,
+            visual_encoder_window_size=config.visual_encoder_window_size,                         
             flow_field_hidden_dim=config.flow_field_hidden_dim,
             flow_field_fourier_features=config.flow_field_fourier_features,
             token_dim=config.token_dim,
@@ -122,10 +128,12 @@ if __name__ == "__main__":
         lr=1e-3,
         weight_decay=0,
         gamma=0.999,
-        road_map_image_size=224,
+        road_map_image_size=256,
         trajectory_feature_dim=10,
         motion_encoder_hidden_dim=512,
         motion_encoder_seq_len=11,
+        visual_encoder_hidden_dim=96,
+        visual_encoder_window_size=8,
         flow_field_hidden_dim=512,
         flow_field_fourier_features=128,
         token_dim=768,
