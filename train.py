@@ -27,6 +27,10 @@ def train(dataloader, model, epochs, lr, weight_decay, gamma, device,
     else:
         batch_generator = lambda: (batch for batch in dataloader)
 
+    if logging_enabled:
+        wandb.define_metric("batch loss", step_metric="batch")
+        wandb.define_metric("epoch loss", step_metric="epoch")
+
     total_batches = 0
     for epoch in range(epochs):
         epoch_loss = torch.tensor(0.0, device=device)
@@ -54,7 +58,7 @@ def train(dataloader, model, epochs, lr, weight_decay, gamma, device,
             total_loss = aggregate_loss(loss.detach())
 
             if logging_enabled:
-                wandb.log({f'batch loss': total_loss}, step=total_batches)
+                wandb.log({"batch loss": total_loss, "batch": total_batches})
                 print(f'Batch {total_batches+1}, Loss: {total_loss:.6f}')
 
             optim.zero_grad()
@@ -71,7 +75,7 @@ def train(dataloader, model, epochs, lr, weight_decay, gamma, device,
         total_avg_loss = aggregate_loss(avg_loss)
         
         if logging_enabled:
-            wandb.log({f'epoch loss': total_avg_loss}, step=epoch)
+            wandb.log({"epoch loss": total_avg_loss, "epoch": epoch})
             print(f'Epoch: {epoch+1}/{epochs}, Loss: {total_avg_loss:.6f}, LR: {scheduler.get_last_lr()[0]:.6f}')
 
         if checkpointing_enabled:
