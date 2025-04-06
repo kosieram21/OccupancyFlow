@@ -135,8 +135,8 @@ if __name__ == "__main__":
         checkpointing_enabled=True,
         tfrecord_path='../data1/waymo_dataset/uncompressed/tf_example/validation',
         idx_path='../idx/validation',
-        batch_size=10,
-        batches_per_epoch=6,#1000,
+        batch_size=6,
+        batches_per_epoch=10,#1000,
         epochs=1000,#100
         lr=1e-3,
         weight_decay=0,
@@ -147,7 +147,7 @@ if __name__ == "__main__":
         motion_encoder_seq_len=11,
         visual_encoder_hidden_dim=96,
         visual_encoder_window_size=8,
-        flow_field_hidden_dim=512,
+        flow_field_hidden_dim=2048,
         flow_field_fourier_features=128,
         token_dim=768,
         embedding_dim=1024
