@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchdiffeq import odeint_adjoint
-from model.layers.SquashLinear import ConcatSquashLinear
+from model.layers.FiLM import FiLM
 	
 class ODEFunc(nn.Module):
 	def __init__(self, input_dim, condition_dim, hidden_dims, num_fourier_features):
@@ -13,7 +13,7 @@ class ODEFunc(nn.Module):
 		dim_list = [fourier_expanded_dim] + list(hidden_dims) + [input_dim]
 		layers = []
 		for i in range(len(dim_list) - 1):
-			layers.append(ConcatSquashLinear(dim_list[i], dim_list[i + 1], condition_dim + 1))
+			layers.append(FiLM(dim_list[i], dim_list[i + 1], condition_dim + 1))
 		self.layers = nn.ModuleList(layers)
 
 	def compute_positional_fourier_features(self, x):

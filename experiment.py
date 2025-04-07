@@ -135,9 +135,9 @@ if __name__ == "__main__":
         checkpointing_enabled=True,
         tfrecord_path='../data1/waymo_dataset/uncompressed/tf_example/validation',
         idx_path='../idx/validation',
-        batch_size=6,
-        batches_per_epoch=10,#1000,
-        epochs=1000,#100
+        batch_size=3,
+        batches_per_epoch=2000,
+        epochs=1000,
         lr=1e-3,
         weight_decay=0,
         gamma=0.999,
