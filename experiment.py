@@ -133,8 +133,8 @@ if __name__ == "__main__":
     config = TrainConfig(
         logging_enabled=True,
         checkpointing_enabled=True,
-        tfrecord_path='../data1/waymo_dataset/uncompressed/tf_example/validation',
-        idx_path='../idx/validation',
+        tfrecord_path='../data1/waymo_dataset/uncompressed/tf_example/training',
+        idx_path='../idx/training',
         batch_size=3,
         batches_per_epoch=2000,
         epochs=1000,
