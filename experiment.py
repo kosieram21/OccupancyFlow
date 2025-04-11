@@ -6,8 +6,10 @@ import torch.nn as nn
 import torch.distributed as dist
 import torch.multiprocessing as mp
 from torch.utils.data import DataLoader
+from torch.utils.data.distributed import DistributedSampler
 from dataclasses import dataclass
-from datasets.Waymo import WaymoDataset, waymo_collate_fn, create_idx
+from datasets.Waymo import WaymoDataset, waymo_collate_fn, create_idx # delete me
+from datasets import WaymoCached, waymo_cached_collate_fn
 from model import OccupancyFlowNetwork
 from train import train
 
@@ -84,9 +86,18 @@ def distributed_train(rank, world_size, config, experiment_id):
     )
 
     try:
-        dataset = WaymoDataset(config.tfrecord_path, config.idx_path, rank, world_size)
-        dataloader = DataLoader(dataset, batch_size=config.batch_size, collate_fn=lambda x: waymo_collate_fn(x))
+        #dataset = WaymoDataset(config.tfrecord_path, config.idx_path, rank, world_size)
+        #dataloader = DataLoader(dataset, batch_size=config.batch_size, collate_fn=lambda x: waymo_collate_fn(x))
     
+        dataset = WaymoCached('../data1/waymo_dataset/v1.1/tensor_cache/validation')
+        sampler = DistributedSampler(dataset, num_replicas=world_size, rank=rank, shuffle=True, drop_last=True)
+        dataloader = DataLoader(dataset, 
+                                batch_size=config.batch_size, 
+                                sampler=sampler, 
+                                num_workers=min(config.batch_size, torch.get_num_threads()), 
+                                collate_fn=waymo_cached_collate_fn,
+                                pin_memory=True)
+
         model = OccupancyFlowNetwork(
             road_map_image_size=config.road_map_image_size,
             trajectory_feature_dim=config.trajectory_feature_dim,
@@ -154,7 +165,7 @@ if __name__ == "__main__":
     )
 
     if should_index:
-        create_idx(config.tfrecord_path, config.idx_path)
+        create_idx(config.tfrecord_path, config.idx_path) # DELETE ME
 
     wandb.login()
 
