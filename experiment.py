@@ -136,7 +136,7 @@ if __name__ == "__main__":
         tfrecord_path='../data1/waymo_dataset/uncompressed/tf_example/training',
         idx_path='../idx/training',
         batch_size=3,
-        batches_per_epoch=2000,
+        batches_per_epoch=250,#2000,
         epochs=1000,
         lr=1e-3,
         weight_decay=0,
