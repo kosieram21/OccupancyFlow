@@ -22,8 +22,10 @@ def train(dataloader, model, epochs, lr, weight_decay, gamma, device,
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optim, gamma=gamma)
 
     if batches_per_epoch is not None:
-        data_iter = itertools.cycle(dataloader)
-        batch_generator = lambda: (next(data_iter) for _ in range(batches_per_epoch))
+        #data_iter = itertools.cycle(dataloader)
+        #batch_generator = lambda: (next(data_iter) for _ in range(batches_per_epoch))
+        batches = [next(iter(dataloader)) for _ in range(batches_per_epoch)]
+        batch_generator = lambda: (batch for batch in batches)
     else:
         batch_generator = lambda: (batch for batch in dataloader)
 
