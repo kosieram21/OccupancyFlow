@@ -18,6 +18,6 @@ if __name__ == "__main__":
     create_idx(args.tfrecord_dir, args.idx_dir)
 
     dataset = WaymoDataset(args.tfrecord_dir, args.idx_dir)
-    dataloader = DataLoader(dataset, batch_size=1, collate_fn=lambda x: waymo_collate_fn(x))
+    dataloader = DataLoader(dataset, batch_size=1, collate_fn=waymo_collate_fn)
 
     cache_data(dataloader, args.cache_dir)
