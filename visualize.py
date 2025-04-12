@@ -1,3 +1,4 @@
+import os
 import math
 import torch
 import matplotlib.pyplot as plt
@@ -5,7 +6,7 @@ from matplotlib.animation import FuncAnimation
 from collections import defaultdict
 from datasets.Waymo import get_image_coordinates, get_image_velocity
 
-def render_observed_scene_state(road_map, agent_trajectories):
+def render_observed_scene_state(road_map, agent_trajectories, save_path=None):
     image_buffer = road_map.numpy() / 255.0
 
     plt.title('Current State (t = 1.0s)')
@@ -22,7 +23,12 @@ def render_observed_scene_state(road_map, agent_trajectories):
         agent_color = agent_cmap[agent_type - 1]
         plt.plot(agent_trajectory[:, 0], agent_trajectory[:, 1], marker='o', markersize=3, color=agent_color)
 
-    plt.show()
+    if save_path is not None:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        plt.savefig(save_path, bbox_inches='tight', dpi=300)
+        plt.close()
+    else:
+        plt.show()
 
 def group_indicies(tensor):
     groups = defaultdict(list)
@@ -32,7 +38,7 @@ def group_indicies(tensor):
         groups[val].append(idx)
     return groups
 
-def render_flow_field(road_map, times, positions, velocity):
+def render_flow_field(road_map, times, positions, velocity, save_path=None):
     image_buffer = road_map.numpy() / 255.0
     grid_size = image_buffer.shape[0]
 
@@ -64,6 +70,10 @@ def render_flow_field(road_map, times, positions, velocity):
               headwidth=4, headlength=5, headaxislength=3)
 
     anim = FuncAnimation(fig, update, frames=len(groups), repeat=False)
+
+    if save_path is not None:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        anim.save(save_path, fps=10, dpi=300)
 
     plt.close(fig)
 
