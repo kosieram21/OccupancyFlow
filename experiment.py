@@ -139,7 +139,7 @@ def multi_device_train(config):
 
 if __name__ == "__main__":
     should_index = False
-    data_parallel = True
+    data_parallel = False#True
     
     config = TrainConfig(
         logging_enabled=True,

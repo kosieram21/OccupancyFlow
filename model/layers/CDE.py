@@ -44,6 +44,7 @@ class CDE(nn.Module):
 		self.f = CDEFunc(input_dim, embedding_dim, hidden_dim, num_layers)
 
 	def forward(self, t, x, mask=None):
+		print(x.shape)
 		if mask is not None:
 			batch_size, max_agents, _, _ = x.shape
 			embedding = torch.zeros(batch_size, max_agents, self.embed.out_features).to(x.device)
@@ -61,4 +62,25 @@ class CDE(nn.Module):
 		else:
 			embedding = out[-1]
 
+		return embedding
+	
+class GRUWithZeroFill(nn.Module):
+	def __init__(self, input_dim, hidden_dim):
+		super(GRUWithZeroFill, self).__init__()
+		self.hidden_dim = hidden_dim
+		self.gru = nn.GRU(
+			input_size=input_dim,
+			hidden_size=hidden_dim,
+			num_layers=4,
+			batch_first=True,
+			bidirectional=True
+		)
+
+	def forward(self, x, mask=None):
+		batch_size, num_agents, seq_len, input_dim = x.shape
+		x_filled = torch.nan_to_num(x, nan=0.0)
+		x_flat = x_filled.view(batch_size * num_agents, seq_len, input_dim)
+		output, _ = self.gru(x_flat)
+		embedding = output[:, -1, :].view(batch_size, num_agents, 2*self.hidden_dim)
+		embedding = embedding * mask.unsqueeze(-1) if mask is not None else embedding
 		return embedding
