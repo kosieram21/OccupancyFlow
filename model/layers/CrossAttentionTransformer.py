@@ -34,7 +34,7 @@ class CrossAttentionLayer(nn.Module):
         return query
 
 class CrossAttentionTransformer(nn.Module):
-    def __init__(self, token_dim, num_layers, num_heads, mlp_dim=2048):
+    def __init__(self, token_dim, num_layers, num_heads, mlp_dim):
         super().__init__()
 
         self.layers = nn.ModuleList([

@@ -35,15 +35,18 @@ class SceneEncoder(nn.Module):
         
         self.interaction_transformer1 = SelfAttentionTransformer(token_dim=token_dim,
                                                                  num_layers=4,
-                                                                 num_heads=8)
+                                                                 num_heads=8,
+                                                                 mlp_dim=2048)
         
         self.fusion_transformer = CrossAttentionTransformer(token_dim=token_dim,
                                                             num_layers=4,
-                                                            num_heads=8)
+                                                            num_heads=8,
+                                                            mlp_dim=2048)
         
         self.interaction_transformer2 = SelfAttentionTransformer(token_dim=token_dim,
                                                                  num_layers=4,
-                                                                 num_heads=8)
+                                                                 num_heads=8,
+                                                                 mlp_dim=2048)
         
         self.pooling_module = GRU(input_dim=token_dim,
                                   hidden_dim=embedding_dim // 2,
