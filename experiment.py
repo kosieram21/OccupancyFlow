@@ -139,29 +139,29 @@ def multi_device_train(config):
 
 if __name__ == "__main__":
     should_index = False
-    data_parallel = False#True
+    data_parallel = True
     
     config = TrainConfig(
         logging_enabled=True,
         checkpointing_enabled=True,
         tfrecord_path='../data1/waymo_dataset/v1.1/waymo_open_dataset_motion_v_1_1_0/uncompressed/tf_example/validation',
         idx_path='../data1/waymo_dataset/v1.1/idx/validation',
-        batch_size=3,
-        batches_per_epoch=250,#2000,
-        epochs=1000,
+        batch_size=16,
+        batches_per_epoch=160,#2000,
+        epochs=2000,
         lr=1e-3,
         weight_decay=0,
         gamma=0.999,
         road_map_image_size=256,
         trajectory_feature_dim=10,
-        motion_encoder_hidden_dim=512,
+        motion_encoder_hidden_dim=256,
         motion_encoder_seq_len=11,
-        visual_encoder_hidden_dim=96,
+        visual_encoder_hidden_dim=256,
         visual_encoder_window_size=8,
-        flow_field_hidden_dim=2048,
+        flow_field_hidden_dim=256,#1024,
         flow_field_fourier_features=128,
-        token_dim=768,
-        embedding_dim=1024
+        token_dim=256,
+        embedding_dim=256
     )
 
     if should_index:
