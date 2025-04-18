@@ -149,7 +149,7 @@ if __name__ == "__main__":
         batch_size=16,
         batches_per_epoch=160,#2000,
         epochs=2000,
-        lr=1e-3,
+        lr=1e-4,
         weight_decay=0,
         gamma=0.999,
         road_map_image_size=256,
@@ -158,7 +158,7 @@ if __name__ == "__main__":
         motion_encoder_seq_len=11,
         visual_encoder_hidden_dim=256,
         visual_encoder_window_size=8,
-        flow_field_hidden_dim=256,#1024,
+        flow_field_hidden_dim=256,
         flow_field_fourier_features=128,
         token_dim=256,
         embedding_dim=256
