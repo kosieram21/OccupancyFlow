@@ -14,6 +14,7 @@ class WaymoCached(Dataset):
 
     def __getitem__(self, idx):
         file_path = self.file_paths[idx]
+        print(file_path)
         sample = torch.load(file_path, map_location='cpu')
         return (
             sample['road_map'],
@@ -50,6 +51,7 @@ def cache_data(dataloader, cache_dir):
             cache_scene(road_map[i], agent_trajectories[i],
                         unobserved_positions[i], future_times[i], target_velocity[i],
                         agent_mask[i], flow_field_mask[i], path)
+            print(idx)
             
 # TODO: move this to a shared location
 def pad_tensors(tensors, max_size):

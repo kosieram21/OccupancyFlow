@@ -147,7 +147,7 @@ if __name__ == "__main__":
         tfrecord_path='../data1/waymo_dataset/v1.1/waymo_open_dataset_motion_v_1_1_0/uncompressed/tf_example/validation',
         idx_path='../data1/waymo_dataset/v1.1/idx/validation',
         batch_size=16,
-        batches_per_epoch=160,#2000,
+        batches_per_epoch=1600,#2000,
         epochs=2000,
         lr=1e-4,
         weight_decay=0,
