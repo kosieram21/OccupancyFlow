@@ -23,18 +23,13 @@ if __name__ == "__main__":
     if not os.path.exists(args.tfrecord_dir):
         raise FileNotFoundError(f"tfrecord directory does not exist: {args.tfrecord_dir}")
 
-    #create_idx(args.tfrecord_dir, args.idx_dir)
+    create_idx(args.tfrecord_dir, args.idx_dir)
 
-    #dataset = WaymoDataset(args.tfrecord_dir, args.idx_dir)
-    #dataloader = DataLoader(dataset, batch_size=1, collate_fn=waymo_collate_fn)
-
-    #cache_data(dataloader, args.cache_dir)
-
-    world_size = torch.get_num_threads()
+    num_workers = torch.get_num_threads()
 
     processes = []
-    for worker_id in range(world_size):
-        p = mp.Process(target=worker, args=(args.tfrecord_dir, args.idx_dir, args.cache_dir, worker_id, world_size))
+    for worker_id in range(num_workers):
+        p = mp.Process(target=worker, args=(args.tfrecord_dir, args.idx_dir, args.cache_dir, worker_id, num_workers))
         p.start()
         processes.append(p)
 

@@ -86,17 +86,17 @@ def distributed_train(rank, world_size, config, experiment_id):
     )
 
     try:
-        dataset = WaymoDataset(config.tfrecord_path, config.idx_path, rank, world_size)
-        dataloader = DataLoader(dataset, batch_size=config.batch_size, collate_fn=waymo_collate_fn)
+        #dataset = WaymoDataset(config.tfrecord_path, config.idx_path, rank, world_size)
+        #dataloader = DataLoader(dataset, batch_size=config.batch_size, collate_fn=waymo_collate_fn)
     
-        # dataset = WaymoCached('../data1/waymo_dataset/v1.1/tensor_cache/validation')
-        # sampler = DistributedSampler(dataset, num_replicas=world_size, rank=rank, shuffle=True, drop_last=True)
-        # dataloader = DataLoader(dataset, 
-        #                         batch_size=config.batch_size, 
-        #                         sampler=sampler, 
-        #                         num_workers=min(config.batch_size, torch.get_num_threads()), 
-        #                         collate_fn=waymo_cached_collate_fn,
-        #                         pin_memory=True)
+        dataset = WaymoCached('../data1/waymo_dataset/v1.1/tensor_cache/training')
+        sampler = DistributedSampler(dataset, num_replicas=world_size, rank=rank, shuffle=True, drop_last=True)
+        dataloader = DataLoader(dataset, 
+                                batch_size=config.batch_size, 
+                                sampler=sampler, 
+                                num_workers=min(config.batch_size, torch.get_num_threads()), 
+                                collate_fn=waymo_cached_collate_fn,
+                                pin_memory=True)
 
         model = OccupancyFlowNetwork(
             road_map_image_size=config.road_map_image_size,
@@ -144,11 +144,11 @@ if __name__ == "__main__":
     config = TrainConfig(
         logging_enabled=True,
         checkpointing_enabled=True,
-        tfrecord_path='../data1/waymo_dataset/v1.1/waymo_open_dataset_motion_v_1_1_0/uncompressed/tf_example/validation',
-        idx_path='../data1/waymo_dataset/v1.1/idx/validation',
+        tfrecord_path='../data1/waymo_dataset/v1.1/waymo_open_dataset_motion_v_1_1_0/uncompressed/tf_example/training',
+        idx_path='../data1/waymo_dataset/v1.1/idx/training',
         batch_size=16,
         batches_per_epoch=1600,#2000,
-        epochs=2000,
+        epochs=100,
         lr=1e-4,
         weight_decay=0,
         gamma=0.999,
