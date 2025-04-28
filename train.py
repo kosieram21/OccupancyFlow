@@ -1,5 +1,4 @@
 import os
-import itertools
 import wandb
 import torch
 import torch.nn.functional as F
@@ -15,19 +14,11 @@ def aggregate_loss(loss):
     return total_loss.item()
 
 def train(dataloader, model, epochs, lr, weight_decay, gamma, device, 
-          logging_enabled=False, checkpointing_enabled=False, batches_per_epoch=None):
+          logging_enabled=False, checkpointing_enabled=False):
     model.train()
 
     optim = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optim, gamma=gamma)
-
-    # if batches_per_epoch is not None:
-    #     #data_iter = itertools.cycle(dataloader)
-    #     #batch_generator = lambda: (next(data_iter) for _ in range(batches_per_epoch))
-    #     batches = [next(iter(dataloader)) for _ in range(batches_per_epoch)]
-    #     batch_generator = lambda: (batch for batch in batches)
-    # else:
-    #     batch_generator = lambda: (batch for batch in dataloader)
 
     if logging_enabled:
         wandb.define_metric("batch loss", step_metric="batch")
@@ -40,7 +31,6 @@ def train(dataloader, model, epochs, lr, weight_decay, gamma, device,
         epoch_loss = torch.tensor(0.0, device=device)
         num_batches = 0
 
-        #for batch in batch_generator():
         for batch in dataloader:
             road_map, agent_trajectories, unobserved_positions, future_times, \
             target_velocity, agent_mask, flow_field_mask = batch
