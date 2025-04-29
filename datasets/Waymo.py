@@ -501,18 +501,18 @@ def rasterize_road_map(data):
 
     return torch.FloatTensor(road_map)
 
-def expand_to_bounding_box(positions, heights, lengths, values = None, step_size=1.0):
+def expand_to_bounding_box(positions, lengths, widths, values = None, step_size=1.0):
     expanded = []
 
     for i in range(positions.shape[0]):
         x_center, y_center = positions[i]
-        height = heights[i][0]
+        width = widths[i][0]
         length = lengths[i][0]
         
         x_min = x_center - length / 2
         x_max = x_center + length / 2
-        y_min = y_center - height / 2
-        y_max = y_center + height / 2
+        y_min = y_center - width / 2
+        y_max = y_center + width / 2
         
         x_pos = np.arange(x_min, x_max, step_size)
         y_pos = np.arange(y_min, y_max, step_size)
@@ -535,8 +535,8 @@ def collate_target_flow_field(data):
     unobserved_positions = np.stack((data['state/future/x'], data['state/future/y']), axis=-1)
     unobserved_positions = unobserved_positions[type_mask]
 
-    agent_height = data['state/future/height'][type_mask].reshape(-1, 1)
     agent_length = data['state/future/length'][type_mask].reshape(-1, 1)
+    agent_width = data['state/future/width'][type_mask].reshape(-1, 1)
     bbox_yaw = data['state/future/bbox_yaw'][type_mask].reshape(-1, 1)
 
     max_agents, timesteps, xy = unobserved_positions.shape
@@ -570,15 +570,15 @@ def collate_target_flow_field(data):
     future_times = future_times[point_mask]
     future_velocity = future_velocity[point_mask]
 
-    agent_height = agent_height[point_mask]
     agent_length = agent_length[point_mask]
+    agent_width = agent_width[point_mask]
     bbox_yaw = bbox_yaw[point_mask]
 
-    agent_centers = expand_to_bounding_box(unobserved_positions, agent_height, agent_length, unobserved_positions)
-    future_times = expand_to_bounding_box(unobserved_positions, agent_height, agent_length, future_times.reshape(-1, 1))
-    future_velocity = expand_to_bounding_box(unobserved_positions, agent_height, agent_length, future_velocity)
-    bbox_yaw = expand_to_bounding_box(unobserved_positions, agent_height, agent_length, bbox_yaw)
-    unobserved_positions = expand_to_bounding_box(unobserved_positions, agent_height, agent_length)
+    agent_centers = expand_to_bounding_box(unobserved_positions, agent_length, agent_width, unobserved_positions)
+    future_times = expand_to_bounding_box(unobserved_positions, agent_length, agent_width, future_times.reshape(-1, 1))
+    future_velocity = expand_to_bounding_box(unobserved_positions, agent_length, agent_width, future_velocity)
+    bbox_yaw = expand_to_bounding_box(unobserved_positions, agent_length, agent_width, bbox_yaw)
+    unobserved_positions = expand_to_bounding_box(unobserved_positions, agent_length, agent_width)
 
     unobserved_positions = unobserved_positions - agent_centers
     for i in range(unobserved_positions.shape[0]):
