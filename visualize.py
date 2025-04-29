@@ -9,11 +9,40 @@ from datasets.Waymo import get_image_coordinates, get_image_velocity, rotate_poi
 
 agent_cmap = ['blue', 'orange', 'yellow', 'purple']
 
+def render_observed_scene_state(road_map, agent_trajectories, save_path=None):
+    image_buffer = road_map.numpy() / 255.0
+
+    plt.title('Current State (t = 1.0s)')
+    plt.imshow(image_buffer)
+    ax = plt.gca()
+    ax.set_xlim(0, image_buffer.shape[1])
+    ax.set_ylim(image_buffer.shape[0], 0)
+    ax.invert_yaxis()
+    ax.axis('off')
+
+    trajectories = get_image_coordinates(agent_trajectories[:,:,:2])
+    for agent in range(trajectories.shape[0]):
+        agent_trajectory = trajectories[agent, :, :]
+        agent_type = agent_trajectories[agent,-1,-1].item()
+        agent_type = 4 if math.isnan(agent_type) else int(agent_type)
+        agent_color = agent_cmap[agent_type - 1]
+        plt.plot(agent_trajectory[:, 0], agent_trajectory[:, 1], marker='o', markersize=3, color=agent_color)
+
+    if save_path is not None:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        plt.savefig(save_path, bbox_inches='tight', dpi=300)
+        plt.close()
+    else:
+        plt.show()
+
 def render_observed_scene_state_current_timestep(road_map, agent_trajectories, save_path=None):
     image_buffer = road_map.numpy() / 255.0
 
     fig, ax = plt.subplots()
     ax.imshow(image_buffer)
+    ax.set_xlim(0, image_buffer.shape[1])
+    ax.set_ylim(image_buffer.shape[0], 0)
+    ax.invert_yaxis()
     ax.axis('off')
 
     for agent in range(agent_trajectories.shape[0]):
@@ -47,9 +76,6 @@ def render_observed_scene_state_current_timestep(road_map, agent_trajectories, s
                  heading[0], heading[1],
                  head_width=1.0, head_length=1.5,
                  fc='orange', ec='orange')
-
-    ax.set_xlim(0, image_buffer.shape[1])
-    ax.set_ylim(image_buffer.shape[0], 0)
         
     if save_path is not None:
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
@@ -58,41 +84,11 @@ def render_observed_scene_state_current_timestep(road_map, agent_trajectories, s
     else:
         plt.show()
 
-def render_observed_scene_state(road_map, agent_trajectories, save_path=None):
-    image_buffer = road_map.numpy() / 255.0
-
-    plt.title('Current State (t = 1.0s)')
-    plt.imshow(image_buffer)
-    plt.axis('off')
-
-    trajectories = get_image_coordinates(agent_trajectories[:,:,:2])
-    for agent in range(trajectories.shape[0]):
-        agent_trajectory = trajectories[agent, :, :]
-        agent_type = agent_trajectories[agent,-1,-1].item()
-        agent_type = 4 if math.isnan(agent_type) else int(agent_type)
-        agent_color = agent_cmap[agent_type - 1]
-        plt.plot(agent_trajectory[:, 0], agent_trajectory[:, 1], marker='o', markersize=3, color=agent_color)
-
-    if save_path is not None:
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        plt.savefig(save_path, bbox_inches='tight', dpi=300)
-        plt.close()
-    else:
-        plt.show()
-
-def group_indicies(tensor):
-    groups = defaultdict(list)
-    tensor = torch.round(tensor * 10)
-    for idx, val in enumerate(tensor):
-        val = val.item() / 10
-        groups[val].append(idx)
-    return groups
-
 def render_flow_field(road_map, times, positions, velocity, save_path=None):
     image_buffer = road_map.numpy() / 255.0
-    grid_size = image_buffer.shape[0]
 
-    groups = group_indicies(times)
+    groups = defaultdict(list)
+    [groups[round(val.item(), 1)].append(idx) for idx, val in enumerate(times)]
     sorted_keys = sorted(groups.keys())
 
     fig, ax = plt.subplots()
@@ -100,10 +96,10 @@ def render_flow_field(road_map, times, positions, velocity, save_path=None):
     def update(frame):
         ax.clear()
         ax.imshow(image_buffer)
+        ax.set_xlim(0, image_buffer.shape[1])
+        ax.set_ylim(image_buffer.shape[0], 0)
+        ax.invert_yaxis()
         ax.axis('off')
-
-        ax.set_xlim(0, grid_size)
-        ax.set_ylim(grid_size, 0)
 
         time = list(sorted_keys)[frame]
         indices = groups[time]
