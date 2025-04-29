@@ -312,7 +312,7 @@ def denormalize_from_sdc(centered_and_rotated_points, data):
 def get_image_coordinates(world_points):
     scale = np.array([PIXELS_PER_METER, -PIXELS_PER_METER])
     offset = np.array([SDC_X_IN_GRID, SDC_Y_IN_GRID])
-    image_points = np.round(world_points * scale) + offset
+    image_points = world_points * scale + offset
     return image_points
 
 def get_world_coordinates(image_points):

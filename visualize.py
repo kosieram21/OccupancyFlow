@@ -39,8 +39,8 @@ def render_observed_scene_state_current_timestep(road_map, agent_trajectories, s
             color=agent_color, linewidth=2
         )
 
-        heading = np.array([[0.75 * -agent_length, 0]])
-        heading = rotate_points_around_origin(heading, agent_bbox_yaw)
+        heading = np.array([[0.75 * agent_length, 0]])
+        heading = rotate_points_around_origin(heading, -agent_bbox_yaw)
         heading = get_image_velocity(heading)[0]
         center = get_image_coordinates(np.array([[agent_x, agent_y]]))[0]
         ax.arrow(center[0], center[1],
