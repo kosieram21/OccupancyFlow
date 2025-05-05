@@ -531,7 +531,7 @@ def expand_to_bounding_box(positions, lengths, widths, values = None, step_size=
     return np.array(expanded)
 
 def collate_target_flow_field(data):
-    type_mask = data['state/type'] == 1
+    type_mask = data['state/type'] == 1 #TODO alloow for other road user types
     unobserved_positions = np.stack((data['state/future/x'], data['state/future/y']), axis=-1)
     unobserved_positions = unobserved_positions[type_mask]
 
