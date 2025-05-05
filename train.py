@@ -14,7 +14,8 @@ def aggregate_loss(loss):
 
     return total_loss.item()
 
-def train(dataloader, model, epochs, lr, weight_decay, gamma, device, 
+def train(dataloader, model, device,
+          epochs, lr, weight_decay, gamma, 
           logging_enabled=False, checkpointing_enabled=False):
     model.train()
 
