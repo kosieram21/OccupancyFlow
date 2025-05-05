@@ -17,10 +17,10 @@ from evaluate import evaluate
 class TrainConfig:
     logging_enabled: bool
     checkpointing_enabled: bool
-    tfrecord_path: str
-    idx_path: str
+    initialize_from_checkpoint: bool
+    train_path: str
+    test_path: str
     batch_size: int
-    batches_per_epoch: int
     epochs: int
     lr: float
     weight_decay: float
@@ -46,7 +46,7 @@ def single_device_train(config):
         config=config.__dict__
     )
 
-    dataset = WaymoCached('../data1/waymo_dataset/v1.1/tensor_cache/training')
+    dataset = WaymoCached(config.train_path)
     dataloader = DataLoader(dataset, 
                             batch_size=config.batch_size, 
                             collate_fn=waymo_cached_collate_fn,
@@ -81,22 +81,22 @@ def distributed_train(rank, world_size, config, experiment_id):
     dist.init_process_group(backend='nccl', rank=rank, world_size=world_size)
     torch.cuda.set_device(rank)
 
-    # wandb.init(
-    #     project="occupancy-flow", 
-    #     name=f"{experiment_id}-{rank}",
-    #     config=config.__dict__,
-    #     mode="online" if rank == 0 else "disabled"
-    # )
+    wandb.init(
+        project='occupancy-flow', 
+        name=f'{experiment_id}-{rank}',
+        config=config.__dict__,
+        mode='online' if rank == 0 else 'disabled'
+    )
 
     try:
-        # train_dataset = WaymoCached('../data1/waymo_dataset/v1.1/tensor_cache/training')
-        # train_sampler = DistributedSampler(dataset, num_replicas=world_size, rank=rank, shuffle=True, drop_last=True)
-        # train_dataloader = DataLoader(dataset, 
-        #                         batch_size=config.batch_size, 
-        #                         sampler=sampler, 
-        #                         num_workers=min(config.batch_size, torch.get_num_threads()), 
-        #                         collate_fn=waymo_cached_collate_fn,
-        #                         pin_memory=True)
+        train_dataset = WaymoCached(config.train_path)
+        train_sampler = DistributedSampler(train_dataset, num_replicas=world_size, rank=rank, shuffle=True, drop_last=True)
+        train_dataloader = DataLoader(train_dataset, 
+                                batch_size=config.batch_size, 
+                                sampler=train_sampler, 
+                                num_workers=min(config.batch_size, torch.get_num_threads()), 
+                                collate_fn=waymo_cached_collate_fn,
+                                pin_memory=True)
 
         model = OccupancyFlowNetwork(
             road_map_image_size=config.road_map_image_size,
@@ -110,22 +110,25 @@ def distributed_train(rank, world_size, config, experiment_id):
             token_dim=config.token_dim,
             embedding_dim=config.embedding_dim
         ).to(rank)
-        model = nn.parallel.DistributedDataParallel(model, device_ids=[rank], find_unused_parameters=True)
-        model.load_state_dict(torch.load('checkpoints/occupancy_flow_checkpoint99.pt')) # should have a bool inidcating if we should load model params
-    
-        # train(
-        #     dataloader=train_dataloader, 
-        #     model=model, 
-        #     epochs=config.epochs, 
-        #     lr=config.lr, 
-        #     weight_decay=config.weight_decay, 
-        #     gamma=config.gamma, 
-        #     device=rank,
-        #     logging_enabled=config.logging_enabled and rank==0,
-        #     checkpointing_enabled=config.checkpointing_enabled
-        # )
 
-        test_dataset = WaymoCached('../data1/waymo_dataset/v1.1/tensor_cache/validation')
+        if config.initialize_from_checkpoint:
+            model.load_state_dict(torch.load(f'checkpoints/occupancy_flow_checkpoint{config.epochs - 1}.pt'))
+
+        model = nn.parallel.DistributedDataParallel(model, device_ids=[rank], find_unused_parameters=True)
+    
+        train(
+            dataloader=train_dataloader, 
+            model=model, 
+            epochs=config.epochs, 
+            lr=config.lr, 
+            weight_decay=config.weight_decay, 
+            gamma=config.gamma, 
+            device=rank,
+            logging_enabled=config.logging_enabled and rank==0,
+            checkpointing_enabled=config.checkpointing_enabled
+        )
+
+        test_dataset = WaymoCached(config.test_path)
         test_sampler = DistributedSampler(test_dataset, num_replicas=world_size, rank=rank, shuffle=True, drop_last=True)
         test_dataloader = DataLoader(test_dataset, 
                                 batch_size=config.batch_size, 
@@ -139,7 +142,10 @@ def distributed_train(rank, world_size, config, experiment_id):
             model=model,
             device=rank
         )
-        print(f'test set end point error: {epe}')
+
+        if config.logging_enabled and rank==0:
+            wandb.log({'epe': epe})
+            print(f'end point error: {epe}')
     
     finally:
         dist.barrier()
@@ -153,16 +159,16 @@ def multi_device_train(config):
     experiment_id = str(uuid.uuid4())
     mp.spawn(distributed_train, args=(world_size, config, experiment_id,), nprocs=world_size, join=True)
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     data_parallel = True
     
     config = TrainConfig(
         logging_enabled=True,
         checkpointing_enabled=True,
-        tfrecord_path='../data1/waymo_dataset/v1.1/waymo_open_dataset_motion_v_1_1_0/uncompressed/tf_example/training',
-        idx_path='../data1/waymo_dataset/v1.1/idx/training',
+        initialize_from_checkpoint=False,
+        train_path = '../data1/waymo_dataset/v1.1/tensor_cache/training',
+        test_path = '../data1/waymo_dataset/v1.1/tensor_cache/validation',
         batch_size=16,
-        batches_per_epoch=1600,#2000,
         epochs=100,
         lr=1e-4,
         weight_decay=0,
@@ -179,7 +185,7 @@ if __name__ == "__main__":
         embedding_dim=256
     )
 
-    #wandb.login()
+    wandb.login()
 
     if torch.cuda.is_available() and data_parallel:
         multi_device_train(config)

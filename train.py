@@ -4,6 +4,7 @@ import torch
 import torch.nn.functional as F
 import torch.distributed as dist
 
+# TODO: should this be moved to a shared location?
 def aggregate_loss(loss):
     total_loss = loss.clone()
 
@@ -77,4 +78,5 @@ def train(dataloader, model, epochs, lr, weight_decay, gamma, device,
         if checkpointing_enabled:
             checkpoint_root = 'checkpoints'
             os.makedirs(checkpoint_root, exist_ok=True)
-            torch.save(model.state_dict(), os.path.join(checkpoint_root, f'occupancy_flow_checkpoint{epoch}.pt'))
+            params = model.module if dist.is_initialized() else model
+            torch.save(params.state_dict(), os.path.join(checkpoint_root, f'occupancy_flow_checkpoint{epoch}.pt'))

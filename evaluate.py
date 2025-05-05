@@ -6,6 +6,7 @@ def end_point_error(target_flow, estimated_flow):
     epe = l2_dist.mean()
     return epe
 
+# TODO: should this be moved to a shared location?
 def aggregate_epe(epe):
     total_epe = epe.clone()
 

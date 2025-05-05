@@ -5,9 +5,6 @@ from torch.utils.data import Dataset
 
 class WaymoCached(Dataset):
     def __init__(self, cache_dir):
-        # self.file_paths = sorted([
-        #     os.path.join(cache_dir, f) for f in os.listdir(cache_dir) if f.endswith('.pt')
-        # ])
         self.file_paths = sorted([
             os.path.join(root, f)
             for root, _, files in os.walk(cache_dir)
