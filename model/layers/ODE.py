@@ -41,12 +41,12 @@ class ODEFunc(nn.Module):
 				h_dot = F.tanh(h_dot)
 		return h_dot
 	
-	def forward(self, t, states):
-		h = states[0]
-		scene_context = states[1]
+	def forward(self, t, state):
+		h = state[0]
+		scene_context = state[1]
 		h_fourier = self.compute_positional_fourier_features(h)
 		h_dot = self._h_dot(t, h_fourier, scene_context)
-		return h_dot, None #torch.zeros_like(scene_context).requires_grad_(True) #if scene_context else None
+		return h_dot, None
 	
 class ODE(nn.Module):
 	def __init__(self, input_dim, condition_dim, hidden_dims, num_fourier_features):
@@ -56,10 +56,12 @@ class ODE(nn.Module):
 		
 	def forward(self, t, h, scene_context, mask=None):
 		# TODO: how should we use the mask here?
-		states = (h, scene_context)
-		flow, _ = self.vector_field(t, states)
+		state = (h, scene_context)
+		flow, _ = self.vector_field(t, state)
 		return flow
 	
-	def solve_ivp(self, initial_value, scene_context, mask=None):
+	def solve_ivp(self, initial_value, scene_context, integration_times, mask=None):
 		# TODO: implement warp occupancy as an initial value problem (IVP)
+		state = (initial_value, scene_context)
+		states = odeint_adjoint(self.time_derivative, state, integration_times, method='rk4', atol=1e-3, rtol=1e-3)
 		return None

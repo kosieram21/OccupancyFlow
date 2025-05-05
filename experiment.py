@@ -81,12 +81,13 @@ def build_dataloader(config, is_train=True, distributed=False, rank=0, world_siz
 def single_device_train(config):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    experiment_id = str(uuid.uuid4())
-    wandb.init(
-        project="occupancy-flow",
-        name=experiment_id,
-        config=config.__dict__
-    )
+    if config.logging_enabled:
+        experiment_id = str(uuid.uuid4())
+        wandb.init(
+            project="occupancy-flow",
+            name=experiment_id,
+            config=config.__dict__
+        )
     
     model = build_model(config, device)
     train_dataloader = build_dataloader(config, is_train=True, distributed=False)
@@ -106,12 +107,13 @@ def distributed_train(rank, world_size, config, experiment_id):
     dist.init_process_group(backend='nccl', rank=rank, world_size=world_size)
     torch.cuda.set_device(rank)
 
-    wandb.init(
-        project='occupancy-flow', 
-        name=f'{experiment_id}-{rank}',
-        config=config.__dict__,
-        mode='online' if rank == 0 else 'disabled'
-    )
+    if config.logging_enabled:
+        wandb.init(
+            project='occupancy-flow', 
+            name=f'{experiment_id}-{rank}',
+            config=config.__dict__,
+            mode='online' if rank == 0 else 'disabled'
+        )
 
     try:
         model = build_model(config, rank, from_checkpoint=config.initialize_from_checkpoint)
@@ -146,7 +148,7 @@ if __name__ == '__main__':
     data_parallel = False
     
     config = TrainConfig(
-        logging_enabled=True,
+        logging_enabled=False,
         checkpointing_enabled=True,
         initialize_from_checkpoint=False,
         should_train=True,
@@ -170,7 +172,8 @@ if __name__ == '__main__':
         embedding_dim=256
     )
 
-    wandb.login()
+    if config.logging_enabled:
+        wandb.login()
 
     if torch.cuda.is_available() and data_parallel:
         multi_device_train(config)
