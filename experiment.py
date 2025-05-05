@@ -18,6 +18,8 @@ class TrainConfig:
     logging_enabled: bool
     checkpointing_enabled: bool
     initialize_from_checkpoint: bool
+    should_train: bool
+    should_evaluate: bool
     train_path: str
     test_path: str
     batch_size: int
@@ -36,22 +38,7 @@ class TrainConfig:
     token_dim: int
     embedding_dim: int
 
-def single_device_train(config):
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-    experiment_id = str(uuid.uuid4())
-    wandb.init(
-        project="occupancy-flow",
-        name=experiment_id,
-        config=config.__dict__
-    )
-
-    dataset = WaymoCached(config.train_path)
-    dataloader = DataLoader(dataset, 
-                            batch_size=config.batch_size, 
-                            collate_fn=waymo_cached_collate_fn,
-                            pin_memory=True)
-
+def build_model(config, device):
     model = OccupancyFlowNetwork(
         road_map_image_size=config.road_map_image_size,
         trajectory_feature_dim=config.trajectory_feature_dim,
@@ -65,17 +52,55 @@ def single_device_train(config):
         embedding_dim=config.embedding_dim
     ).to(device)
 
-    train(
-        dataloader=dataloader,
-        model=model,
-        epochs=config.epochs,
-        lr=config.lr,
-        weight_decay=config.weight_decay,
-        gamma=config.gamma,
-        device=device,
-        logging_enabled=config.logging_enabled,
-        checkpointing_enabled=config.checkpointing_enabled
+    if config.initialize_from_checkpoint:
+        model.load_state_dict(torch.load(f'checkpoints/occupancy_flow_checkpoint{config.epochs - 1}.pt'))
+
+    return model
+
+def build_dataloader(config, is_train=True, distributed=False, rank=0, world_size=1):
+    path = config.train_path if is_train else config.test_path
+    dataset = WaymoCached(path)
+
+    if distributed:
+        sampler = DistributedSampler(dataset, num_replicas=world_size, rank=rank, shuffle=is_train, drop_last=is_train)
+    else:
+        sampler = None
+
+    dataloader = DataLoader(
+        dataset,
+        batch_size=config.batch_size,
+        sampler=sampler,
+        shuffle=(sampler is None and is_train),
+        num_workers=min(config.batch_size, torch.get_num_threads()),
+        collate_fn=waymo_cached_collate_fn,
+        pin_memory=True
     )
+
+    return dataloader
+
+def single_device_train(config):
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    experiment_id = str(uuid.uuid4())
+    wandb.init(
+        project="occupancy-flow",
+        name=experiment_id,
+        config=config.__dict__
+    )
+    
+    model = build_model(config, device)
+    train_dataloader = build_dataloader(config, is_train=True, distributed=False)
+    test_dataloader = build_dataloader(config, is_train=False, distributed=False)
+
+    train(dataloader=train_dataloader, model=model, device=device, 
+          epochs=config.epochs, lr=config.lr, weight_decay=config.weight_decay, gamma=config.gamma,
+          logging_enabled=config.logging_enabled, checkpointing_enabled=config.checkpointing_enabled)
+    
+    epe = evaluate(dataloader=test_dataloader, model=model, device=device)
+
+    if config.logging_enabled:
+        wandb.log({'epe': epe})
+        print(f'end point error: {epe}')
 
 def distributed_train(rank, world_size, config, experiment_id):
     dist.init_process_group(backend='nccl', rank=rank, world_size=world_size)
@@ -89,59 +114,17 @@ def distributed_train(rank, world_size, config, experiment_id):
     )
 
     try:
-        train_dataset = WaymoCached(config.train_path)
-        train_sampler = DistributedSampler(train_dataset, num_replicas=world_size, rank=rank, shuffle=True, drop_last=True)
-        train_dataloader = DataLoader(train_dataset, 
-                                batch_size=config.batch_size, 
-                                sampler=train_sampler, 
-                                num_workers=min(config.batch_size, torch.get_num_threads()), 
-                                collate_fn=waymo_cached_collate_fn,
-                                pin_memory=True)
-
-        model = OccupancyFlowNetwork(
-            road_map_image_size=config.road_map_image_size,
-            trajectory_feature_dim=config.trajectory_feature_dim,
-            motion_encoder_hidden_dim=config.motion_encoder_hidden_dim,
-            motion_encoder_seq_len=config.motion_encoder_seq_len, 
-            visual_encoder_hidden_dim=config.visual_encoder_hidden_dim,
-            visual_encoder_window_size=config.visual_encoder_window_size,                         
-            flow_field_hidden_dim=config.flow_field_hidden_dim,
-            flow_field_fourier_features=config.flow_field_fourier_features,
-            token_dim=config.token_dim,
-            embedding_dim=config.embedding_dim
-        ).to(rank)
-
-        if config.initialize_from_checkpoint:
-            model.load_state_dict(torch.load(f'checkpoints/occupancy_flow_checkpoint{config.epochs - 1}.pt'))
-
+        model = build_model(config, rank, from_checkpoint=config.initialize_from_checkpoint)
         model = nn.parallel.DistributedDataParallel(model, device_ids=[rank], find_unused_parameters=True)
-    
-        train(
-            dataloader=train_dataloader, 
-            model=model, 
-            epochs=config.epochs, 
-            lr=config.lr, 
-            weight_decay=config.weight_decay, 
-            gamma=config.gamma, 
-            device=rank,
-            logging_enabled=config.logging_enabled and rank==0,
-            checkpointing_enabled=config.checkpointing_enabled
-        )
 
-        test_dataset = WaymoCached(config.test_path)
-        test_sampler = DistributedSampler(test_dataset, num_replicas=world_size, rank=rank, shuffle=True, drop_last=True)
-        test_dataloader = DataLoader(test_dataset, 
-                                batch_size=config.batch_size, 
-                                sampler=test_sampler, 
-                                num_workers=min(config.batch_size, torch.get_num_threads()), 
-                                collate_fn=waymo_cached_collate_fn,
-                                pin_memory=True)
-        
-        epe = evaluate(
-            dataloader=test_dataloader,
-            model=model,
-            device=rank
-        )
+        train_dataloader = build_dataloader(config, is_train=True, distributed=True, rank=rank, world_size=world_size)
+        test_dataloader = build_dataloader(config, is_train=False, distributed=True, rank=rank, world_size=world_size)
+
+        train(dataloader=train_dataloader, model=model, device=rank, 
+              epochs=config.epochs, lr=config.lr, weight_decay=config.weight_decay, gamma=config.gamma,
+              logging_enabled=config.logging_enabled, checkpointing_enabled=config.checkpointing_enabled)
+    
+        epe = evaluate(dataloader=test_dataloader, model=model, device=rank)
 
         if config.logging_enabled and rank==0:
             wandb.log({'epe': epe})
@@ -160,12 +143,14 @@ def multi_device_train(config):
     mp.spawn(distributed_train, args=(world_size, config, experiment_id,), nprocs=world_size, join=True)
 
 if __name__ == '__main__':
-    data_parallel = True
+    data_parallel = False
     
     config = TrainConfig(
         logging_enabled=True,
         checkpointing_enabled=True,
         initialize_from_checkpoint=False,
+        should_train=True,
+        should_evaluate=True,
         train_path = '../data1/waymo_dataset/v1.1/tensor_cache/training',
         test_path = '../data1/waymo_dataset/v1.1/tensor_cache/validation',
         batch_size=16,

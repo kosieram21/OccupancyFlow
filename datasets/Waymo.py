@@ -587,11 +587,6 @@ def collate_target_flow_field(data):
 
     return torch.FloatTensor(unobserved_positions), torch.FloatTensor(future_times), torch.FloatTensor(future_velocity)
 
-def collate_target_occupancy_grid(data):
-    future_positions = np.stack((data['state/future/x'], data['state/future/y']), axis=-1)
-    # TODO: collate ground truth occupancy grid
-    return torch.rand(224, 224, 3) # placeholder
-
 def pad_tensors(tensors, max_size):
     padded_tensors = []
     masks = []
@@ -617,7 +612,6 @@ def waymo_collate_fn(batch):
     unobserved_positions = []
     future_times = []
     future_velocities = []
-    target_occupancy_grids = []
 
     for data in batch:
         road_maps.append(rasterize_road_map(data))
@@ -626,7 +620,6 @@ def waymo_collate_fn(batch):
         unobserved_positions.append(pos)
         future_times.append(t)
         future_velocities.append(vel)
-        target_occupancy_grids.append(collate_target_occupancy_grid(data))
 
     max_agents = max(t.shape[0] for t in agent_trajectories)
     max_unobserved_positions = max(t.shape[0] for t in unobserved_positions)
@@ -640,7 +633,6 @@ def waymo_collate_fn(batch):
     unobserved_positions_batch = torch.stack(unobserved_positions, dim=0)
     future_times_batch = torch.stack(future_times, dim=0)
     future_velocities_batch = torch.stack(future_velocities, dim=0)
-    target_occupancy_grid_batch = torch.stack(target_occupancy_grids, dim=0) # we won't use until later
     agent_mask_batch = torch.stack(agent_mask, dim=0)
     flow_field_mask_batch = torch.stack(flow_field_mask, dim=0)
 
