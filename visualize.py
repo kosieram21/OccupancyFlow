@@ -1,41 +1,13 @@
 import os
 import math
-import torch
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.collections import LineCollection
 from matplotlib.animation import FuncAnimation
 from collections import defaultdict
 from datasets.Waymo import get_image_coordinates, get_image_velocity, rotate_points_around_origin
 
-agent_cmap = ['blue', 'orange', 'yellow', 'purple']
-
 def render_observed_scene_state(road_map, agent_trajectories, save_path=None):
-    image_buffer = road_map.numpy() / 255.0
-
-    plt.title('Current State (t = 1.0s)')
-    plt.imshow(image_buffer)
-    ax = plt.gca()
-    ax.set_xlim(0, image_buffer.shape[1])
-    ax.set_ylim(image_buffer.shape[0], 0)
-    ax.invert_yaxis()
-    ax.axis('off')
-
-    trajectories = get_image_coordinates(agent_trajectories[:,:,:2])
-    for agent in range(trajectories.shape[0]):
-        agent_trajectory = trajectories[agent, :, :]
-        agent_type = agent_trajectories[agent,-1,-1].item()
-        agent_type = 4 if math.isnan(agent_type) else int(agent_type)
-        agent_color = agent_cmap[agent_type - 1]
-        plt.plot(agent_trajectory[:, 0], agent_trajectory[:, 1], marker='o', markersize=3, color=agent_color)
-
-    if save_path is not None:
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        plt.savefig(save_path, bbox_inches='tight', dpi=300)
-        plt.close()
-    else:
-        plt.show()
-
-def render_observed_scene_state_current_timestep(road_map, agent_trajectories, save_path=None):
     image_buffer = road_map.numpy() / 255.0
 
     fig, ax = plt.subplots()
@@ -45,7 +17,11 @@ def render_observed_scene_state_current_timestep(road_map, agent_trajectories, s
     ax.invert_yaxis()
     ax.axis('off')
 
+    agent_cmap = ['blue', 'orange', 'yellow', 'purple']
+    track_size_map = [5, 1, 1, 1]
+
     for agent in range(agent_trajectories.shape[0]):
+        agent_trajectory = get_image_coordinates(agent_trajectories[agent,:,:2])
         agent_x = agent_trajectories[agent, -1, 0].item()
         agent_y = agent_trajectories[agent, -1, 1].item()
         agent_bbox_yaw = agent_trajectories[agent, -1, 2].item()
@@ -54,6 +30,13 @@ def render_observed_scene_state_current_timestep(road_map, agent_trajectories, s
         agent_type = agent_trajectories[agent,-1, -1].item()
         agent_type = 4 if math.isnan(agent_type) else int(agent_type)
         agent_color = agent_cmap[agent_type - 1]
+        agent_track_size = track_size_map[agent_type - 1]
+        
+        segments = np.concatenate([agent_trajectory[:-1, None], agent_trajectory[1:, None]], axis=1)
+        alphas = np.linspace(0.2, 1.0, len(segments))
+        colors = np.array([[0, 1, 1, a] for a in alphas])
+        lc = LineCollection(segments, colors=colors, linewidths=agent_track_size)
+        ax.add_collection(lc)
     
         half_w = agent_width / 2
         half_l = agent_length / 2
@@ -61,11 +44,10 @@ def render_observed_scene_state_current_timestep(road_map, agent_trajectories, s
         corners = rotate_points_around_origin(corners, agent_bbox_yaw)
         corners += np.array([agent_x, agent_y])
         corners = get_image_coordinates(corners)
-
         ax.plot(
             [*corners[:, 0], corners[0, 0]],
             [*corners[:, 1], corners[0, 1]],
-            color=agent_color, linewidth=2
+            color=agent_color, linewidth=1
         )
 
         heading = np.array([[0.75 * agent_length, 0]])
