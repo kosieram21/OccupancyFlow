@@ -27,29 +27,21 @@ class TrainConfig:
     lr: float
     weight_decay: float
     gamma: float
-    road_map_image_size: int
+    road_map_image_size: int 
+    road_map_window_size: int 
     trajectory_feature_dim: int
-    motion_encoder_hidden_dim: int
-    motion_encoder_seq_len: int
-    visual_encoder_hidden_dim: int 
-    visual_encoder_window_size: int
+    embedding_dim: int
     flow_field_hidden_dim: int
     flow_field_fourier_features: int
-    token_dim: int
-    embedding_dim: int
 
 def build_model(config, device):
     model = OccupancyFlowNetwork(
-        road_map_image_size=config.road_map_image_size,
-        trajectory_feature_dim=config.trajectory_feature_dim,
-        motion_encoder_hidden_dim=config.motion_encoder_hidden_dim,
-        motion_encoder_seq_len=config.motion_encoder_seq_len, 
-        visual_encoder_hidden_dim=config.visual_encoder_hidden_dim,
-        visual_encoder_window_size=config.visual_encoder_window_size,                            
-        flow_field_hidden_dim=config.flow_field_hidden_dim,
-        flow_field_fourier_features=config.flow_field_fourier_features,
-        token_dim=config.token_dim,
-        embedding_dim=config.embedding_dim
+        road_map_image_size=config.road_map_image_size, 
+        road_map_window_size=config.road_map_window_size, 
+		trajectory_feature_dim=config.trajectory_feature_dim, 
+		embedding_dim=config.embedding_dim, 
+		flow_field_hidden_dim=config.flow_field_hidden_dim, 
+        flow_field_fourier_features=config.flow_field_fourier_features
     ).to(device)
 
     if config.initialize_from_checkpoint:
@@ -57,7 +49,7 @@ def build_model(config, device):
 
     return model
 
-def build_dataloader(config, is_train=True, distributed=False, rank=0, world_size=1):
+def prepare_dataset(config, is_train=True, distributed=False, rank=0, world_size=1):
     path = config.train_path if is_train else config.test_path
     dataset = WaymoCached(path)
 
@@ -90,8 +82,8 @@ def single_device_train(config):
         )
     
     model = build_model(config, device)
-    train_dataloader = build_dataloader(config, is_train=True, distributed=False)
-    test_dataloader = build_dataloader(config, is_train=False, distributed=False)
+    train_dataloader = prepare_dataset(config, is_train=True, distributed=False)
+    test_dataloader = prepare_dataset(config, is_train=False, distributed=False)
 
     train(dataloader=train_dataloader, model=model, device=device, 
           epochs=config.epochs, lr=config.lr, weight_decay=config.weight_decay, gamma=config.gamma,
@@ -116,11 +108,11 @@ def distributed_train(rank, world_size, config, experiment_id):
         )
 
     try:
-        model = build_model(config, rank, from_checkpoint=config.initialize_from_checkpoint)
+        model = build_model(config, rank)
         model = nn.parallel.DistributedDataParallel(model, device_ids=[rank], find_unused_parameters=True)
 
-        train_dataloader = build_dataloader(config, is_train=True, distributed=True, rank=rank, world_size=world_size)
-        test_dataloader = build_dataloader(config, is_train=False, distributed=True, rank=rank, world_size=world_size)
+        train_dataloader = prepare_dataset(config, is_train=True, distributed=True, rank=rank, world_size=world_size)
+        test_dataloader = prepare_dataset(config, is_train=False, distributed=True, rank=rank, world_size=world_size)
 
         train(dataloader=train_dataloader, model=model, device=rank, 
               epochs=config.epochs, lr=config.lr, weight_decay=config.weight_decay, gamma=config.gamma,
@@ -148,8 +140,8 @@ if __name__ == '__main__':
     data_parallel = False
     
     config = TrainConfig(
-        logging_enabled=False,
-        checkpointing_enabled=True,
+        logging_enabled=True,
+        checkpointing_enabled=False,
         initialize_from_checkpoint=False,
         should_train=True,
         should_evaluate=True,
@@ -161,15 +153,11 @@ if __name__ == '__main__':
         weight_decay=0,
         gamma=0.999,
         road_map_image_size=256,
+        road_map_window_size=8,
         trajectory_feature_dim=10,
-        motion_encoder_hidden_dim=256,
-        motion_encoder_seq_len=11,
-        visual_encoder_hidden_dim=256,
-        visual_encoder_window_size=8,
+        embedding_dim=256,
         flow_field_hidden_dim=256,
-        flow_field_fourier_features=128,
-        token_dim=256,
-        embedding_dim=256
+        flow_field_fourier_features=128
     )
 
     if config.logging_enabled:

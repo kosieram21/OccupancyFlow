@@ -64,4 +64,4 @@ class ODE(nn.Module):
 		# TODO: implement warp occupancy as an initial value problem (IVP)
 		state = (initial_value, scene_context)
 		states = odeint_adjoint(self.time_derivative, state, integration_times, method='rk4', atol=1e-3, rtol=1e-3)
-		return None
+		return None # occupancies at integration times
