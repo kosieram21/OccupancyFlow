@@ -551,6 +551,7 @@ def collate_target_flow_field(data):
     unobserved_positions = centered_and_rotated_unobserved_positions.reshape(max_agents, timesteps, xy)
     fov_mask = fov_mask.reshape(max_agents, timesteps)
 
+    agent_ids = np.repeat(data['state/id'][type_mask][:, np.newaxis], 80, axis=1)
     future_times = data['state/future/timestamp_micros'] / 1000000
     future_velocity = np.stack((data['state/future/velocity_x'], data['state/future/velocity_y']), axis=-1)
     future_velocity = rotate_points_around_origin(future_velocity, angle)
@@ -561,11 +562,13 @@ def collate_target_flow_field(data):
     is_valid_mask = data['state/future/valid'][type_mask] > 0.
     point_mask = np.logical_and(fov_mask, is_valid_mask)
 
+    agent_ids = agent_ids.reshape(-1, 1)
     unobserved_positions = unobserved_positions.reshape(-1, 2)
-    future_times = future_times.reshape(-1)
+    future_times = future_times.reshape(-1, 1)
     future_velocity = future_velocity.reshape(-1, 2)
     point_mask = point_mask.reshape(-1)
 
+    agent_ids = agent_ids[point_mask]
     unobserved_positions = unobserved_positions[point_mask]
     future_times = future_times[point_mask]
     future_velocity = future_velocity[point_mask]
@@ -574,8 +577,9 @@ def collate_target_flow_field(data):
     agent_width = agent_width[point_mask]
     bbox_yaw = bbox_yaw[point_mask]
 
+    agent_ids = expand_to_bounding_box(unobserved_positions, agent_length, agent_width, agent_ids)
     agent_centers = expand_to_bounding_box(unobserved_positions, agent_length, agent_width, unobserved_positions)
-    future_times = expand_to_bounding_box(unobserved_positions, agent_length, agent_width, future_times.reshape(-1, 1))
+    future_times = expand_to_bounding_box(unobserved_positions, agent_length, agent_width, future_times)
     future_velocity = expand_to_bounding_box(unobserved_positions, agent_length, agent_width, future_velocity)
     bbox_yaw = expand_to_bounding_box(unobserved_positions, agent_length, agent_width, bbox_yaw)
     unobserved_positions = expand_to_bounding_box(unobserved_positions, agent_length, agent_width)
@@ -585,7 +589,12 @@ def collate_target_flow_field(data):
         unobserved_positions[i] = rotate_points_around_origin(unobserved_positions[i], -bbox_yaw[i] - angle)
     unobserved_positions = unobserved_positions + agent_centers
 
-    return torch.FloatTensor(unobserved_positions), torch.FloatTensor(future_times), torch.FloatTensor(future_velocity)
+    return (
+        torch.FloatTensor(agent_ids), 
+        torch.FloatTensor(unobserved_positions), 
+        torch.FloatTensor(future_times), 
+        torch.FloatTensor(future_velocity)
+    )
 
 def pad_tensors(tensors, max_size):
     padded_tensors = []
@@ -609,6 +618,7 @@ def pad_tensors(tensors, max_size):
 def waymo_collate_fn(batch):
     road_maps = []
     agent_trajectories = []
+    agent_ids = []
     unobserved_positions = []
     future_times = []
     future_velocities = []
@@ -616,7 +626,8 @@ def waymo_collate_fn(batch):
     for data in batch:
         road_maps.append(rasterize_road_map(data))
         agent_trajectories.append(collate_agent_trajectories(data))
-        pos, t, vel = collate_target_flow_field(data)
+        ids, pos, t, vel = collate_target_flow_field(data)
+        agent_ids.append(ids)
         unobserved_positions.append(pos)
         future_times.append(t)
         future_velocities.append(vel)
@@ -624,12 +635,14 @@ def waymo_collate_fn(batch):
     max_agents = max(t.shape[0] for t in agent_trajectories)
     max_unobserved_positions = max(t.shape[0] for t in unobserved_positions)
     agent_trajectories, agent_mask = pad_tensors(agent_trajectories, max_agents)
-    unobserved_positions, flow_field_mask = pad_tensors(unobserved_positions, max_unobserved_positions)
+    agent_ids, flow_field_mask = pad_tensors(agent_ids, max_unobserved_positions)
+    unobserved_positions, _ = pad_tensors(unobserved_positions, max_unobserved_positions)
     future_times, _ = pad_tensors(future_times, max_unobserved_positions)
     future_velocities, _ = pad_tensors(future_velocities, max_unobserved_positions)
 
     road_map_batch = torch.stack(road_maps, dim=0)
     agent_trajectories_batch = torch.stack(agent_trajectories, dim=0)
+    agent_ids_batch = torch.stack(agent_ids, dim=0)
     unobserved_positions_batch = torch.stack(unobserved_positions, dim=0)
     future_times_batch = torch.stack(future_times, dim=0)
     future_velocities_batch = torch.stack(future_velocities, dim=0)
@@ -639,6 +652,7 @@ def waymo_collate_fn(batch):
     return (
         road_map_batch,
         agent_trajectories_batch,
+        agent_ids_batch,
         unobserved_positions_batch,
         future_times_batch,
         future_velocities_batch,
