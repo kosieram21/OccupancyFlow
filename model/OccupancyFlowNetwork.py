@@ -23,5 +23,5 @@ class OccupancyFlowNetwork(nn.Module):
 		flow = self.flow_field(t, h, scene_context, flow_field_mask)
 		return flow
 	
-	def warp_occupancy(self, occupancy, scene_context):
-		return self.flow_field.solve_ivp(occupancy, scene_context)
+	def warp_occupancy(self, occupancy, integration_times, scene_context):
+		return self.flow_field.solve_ivp(occupancy, integration_times, scene_context)
