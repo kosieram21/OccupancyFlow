@@ -535,8 +535,13 @@ def collate_target_flow_field(data):
     unobserved_positions = np.stack((data['state/future/x'], data['state/future/y']), axis=-1)
     unobserved_positions = unobserved_positions[type_mask]
 
-    agent_length = data['state/future/length'][type_mask].reshape(-1, 1)
-    agent_width = data['state/future/width'][type_mask].reshape(-1, 1)
+    num_futures = unobserved_positions.shape[1]
+    max_length = np.max(data['state/future/length'][type_mask], axis=1, keepdims=True)
+    max_width = np.max(data['state/future/width'][type_mask], axis=1, keepdims=True)
+    agent_length = np.repeat(max_length, num_futures, axis=1).reshape(-1, 1)
+    agent_width = np.repeat(max_width, num_futures, axis=1).reshape(-1, 1)
+    #agent_length = data['state/future/length'][type_mask].reshape(-1, 1)
+    #agent_width = data['state/future/width'][type_mask].reshape(-1, 1)
     bbox_yaw = data['state/future/bbox_yaw'][type_mask].reshape(-1, 1)
 
     max_agents, timesteps, xy = unobserved_positions.shape
