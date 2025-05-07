@@ -391,12 +391,12 @@ def collate_agent_trajectories(data):
     observed_states = np.concatenate((past_states, current_states), axis=1)
     observed_states = np.concatenate((observed_positions, observed_states), axis=-1)
 
-    agent_type = np.reshape(data['state/type'], (128, 1, 1))
-    agent_type = np.tile(agent_type, (1, 11, 1))
+    agent_type = np.reshape(data['state/type'], (max_agents, 1, 1))
+    agent_type = np.tile(agent_type, (1, timesteps, 1))
     observed_states = np.concatenate((observed_states, agent_type), axis=-1)
     
     is_valid_mask = np.concatenate((past_states_valid, current_states_valid), axis=1)
-    point_mask = np.logical_and(fov_mask, is_valid_mask) # is_valid_mask
+    point_mask = np.logical_and(fov_mask, is_valid_mask)
 
     any_observed_states_valid_mask = np.sum(point_mask, axis=1) > 0
     observed_states = observed_states[any_observed_states_valid_mask]
@@ -543,32 +543,46 @@ def collate_target_flow_field(data):
     
     centered_and_rotated_agent_positions, angle, translation = normalize_about_sdc(agent_positions, data)
     centered_and_rotated_agent_positions[:, 1] = -centered_and_rotated_agent_positions[:, 1]
-
     centered_and_rotated_image_agent_positions = get_image_coordinates(centered_and_rotated_agent_positions)
-    fov_mask = get_fov_mask(centered_and_rotated_image_agent_positions)
 
-    agent_positions = centered_and_rotated_agent_positions.reshape(max_agents, timesteps, xy)
+    fov_mask = get_fov_mask(centered_and_rotated_image_agent_positions)
     fov_mask = fov_mask.reshape(max_agents, timesteps)
+
+    is_valid = np.concatenate((data['state/current/valid'], data['state/future/valid']), axis=1)
+    is_valid_mask = is_valid[type_mask] > 0.
+    point_mask = np.logical_and(fov_mask, is_valid_mask)
+    point_mask = point_mask.reshape(-1)
 
     agent_lengths = np.concatenate((data['state/current/length'], data['state/future/length']), axis=1)
     agent_lengths = agent_lengths[type_mask]
     max_length = np.max(agent_lengths, axis=1, keepdims=True)
     agent_lengths = np.repeat(max_length, timesteps, axis=1).reshape(-1, 1)
+    agent_lengths = agent_lengths[point_mask]
     
     agent_widths = np.concatenate((data['state/current/width'], data['state/future/width']), axis=1)
     agent_widths = agent_widths[type_mask]
     max_width = np.max(agent_widths, axis=1, keepdims=True)
     agent_widths = np.repeat(max_width, timesteps, axis=1).reshape(-1, 1)
+    agent_widths = agent_widths[point_mask]
 
     agent_bbox_yaws = np.concatenate((data['state/current/bbox_yaw'], data['state/future/bbox_yaw']), axis=1)
     agent_bbox_yaws = agent_bbox_yaws[type_mask].reshape(-1, 1)
+    agent_bbox_yaws = agent_bbox_yaws[point_mask]
 
     agent_ids = data['state/id'][type_mask]
     agent_ids = np.repeat(agent_ids[:, np.newaxis], timesteps, axis=1)
+    agent_ids = agent_ids.reshape(-1, 1)
+    agent_ids = agent_ids[point_mask]
+
+    agent_positions = centered_and_rotated_agent_positions.reshape(max_agents, timesteps, xy)
+    agent_positions = agent_positions.reshape(-1, 2)
+    agent_positions = agent_positions[point_mask]
 
     agent_times = np.concatenate((data['state/current/timestamp_micros'], data['state/future/timestamp_micros']), axis=1)
     agent_times = agent_times / 1000000
     agent_times = agent_times[type_mask]
+    agent_times = agent_times.reshape(-1, 1)
+    agent_times = agent_times[point_mask]
 
     # TODO: I believe for backwards flow we just need to shift the velocity back one
     current_velocity = np.stack((data['state/current/velocity_x'], data['state/current/velocity_y']), axis=-1)
@@ -576,25 +590,8 @@ def collate_target_flow_field(data):
     agent_velocities = np.concatenate((current_velocity, future_velocities), axis=1)
     agent_velocities = rotate_points_around_origin(agent_velocities, angle)
     agent_velocities = agent_velocities[type_mask]
-
-    is_valid = np.concatenate((data['state/current/valid'], data['state/future/valid']), axis=1)
-    is_valid_mask = is_valid[type_mask] > 0.
-    point_mask = np.logical_and(fov_mask, is_valid_mask)
-
-    agent_ids = agent_ids.reshape(-1, 1)
-    agent_positions = agent_positions.reshape(-1, 2)
-    agent_times = agent_times.reshape(-1, 1)
     agent_velocities = agent_velocities.reshape(-1, 2)
-    point_mask = point_mask.reshape(-1)
-
-    agent_ids = agent_ids[point_mask]
-    agent_positions = agent_positions[point_mask]
-    agent_times = agent_times[point_mask]
     agent_velocities = agent_velocities[point_mask]
-
-    agent_lengths = agent_lengths[point_mask]
-    agent_widths = agent_widths[point_mask]
-    agent_bbox_yaws = agent_bbox_yaws[point_mask]
 
     agent_ids = expand_to_bounding_box(agent_positions, agent_lengths, agent_widths, agent_ids)
     agent_centers = expand_to_bounding_box(agent_positions, agent_lengths, agent_widths, agent_positions)
