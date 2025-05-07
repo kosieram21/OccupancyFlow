@@ -532,73 +532,87 @@ def expand_to_bounding_box(positions, lengths, widths, values = None, step_size=
 
 def collate_target_flow_field(data):
     type_mask = data['state/type'] == 1 #TODO alloow for other road user types
-    unobserved_positions = np.stack((data['state/future/x'], data['state/future/y']), axis=-1)
-    unobserved_positions = unobserved_positions[type_mask]
 
-    num_futures = unobserved_positions.shape[1]
-    max_length = np.max(data['state/future/length'][type_mask], axis=1, keepdims=True)
-    max_width = np.max(data['state/future/width'][type_mask], axis=1, keepdims=True)
-    agent_length = np.repeat(max_length, num_futures, axis=1).reshape(-1, 1)
-    agent_width = np.repeat(max_width, num_futures, axis=1).reshape(-1, 1)
-    #agent_length = data['state/future/length'][type_mask].reshape(-1, 1)
-    #agent_width = data['state/future/width'][type_mask].reshape(-1, 1)
-    bbox_yaw = data['state/future/bbox_yaw'][type_mask].reshape(-1, 1)
+    current_position = np.stack((data['state/current/x'], data['state/current/y']), axis=-1)
+    future_positions = np.stack((data['state/future/x'], data['state/future/y']), axis=-1)
+    agent_positions = np.concatenate((current_position, future_positions), axis=1)
+    agent_positions = agent_positions[type_mask]
 
-    max_agents, timesteps, xy = unobserved_positions.shape
-    unobserved_positions = unobserved_positions.reshape(-1, xy)
+    max_agents, timesteps, xy = agent_positions.shape
+    agent_positions = agent_positions.reshape(-1, xy)
     
-    centered_and_rotated_unobserved_positions, angle, translation = normalize_about_sdc(unobserved_positions, data)
-    centered_and_rotated_unobserved_positions[:, 1] = -centered_and_rotated_unobserved_positions[:, 1]
+    centered_and_rotated_agent_positions, angle, translation = normalize_about_sdc(agent_positions, data)
+    centered_and_rotated_agent_positions[:, 1] = -centered_and_rotated_agent_positions[:, 1]
 
-    centered_and_rotated_image_unobserved_positions = get_image_coordinates(centered_and_rotated_unobserved_positions)
-    fov_mask = get_fov_mask(centered_and_rotated_image_unobserved_positions)
+    centered_and_rotated_image_agent_positions = get_image_coordinates(centered_and_rotated_agent_positions)
+    fov_mask = get_fov_mask(centered_and_rotated_image_agent_positions)
 
-    unobserved_positions = centered_and_rotated_unobserved_positions.reshape(max_agents, timesteps, xy)
+    agent_positions = centered_and_rotated_agent_positions.reshape(max_agents, timesteps, xy)
     fov_mask = fov_mask.reshape(max_agents, timesteps)
 
-    agent_ids = np.repeat(data['state/id'][type_mask][:, np.newaxis], 80, axis=1)
-    future_times = data['state/future/timestamp_micros'] / 1000000
-    future_velocity = np.stack((data['state/future/velocity_x'], data['state/future/velocity_y']), axis=-1)
-    future_velocity = rotate_points_around_origin(future_velocity, angle)
+    agent_lengths = np.concatenate((data['state/current/length'], data['state/future/length']), axis=1)
+    agent_lengths = agent_lengths[type_mask]
+    max_length = np.max(agent_lengths, axis=1, keepdims=True)
+    agent_lengths = np.repeat(max_length, timesteps, axis=1).reshape(-1, 1)
+    
+    agent_widths = np.concatenate((data['state/current/width'], data['state/future/width']), axis=1)
+    agent_widths = agent_widths[type_mask]
+    max_width = np.max(agent_widths, axis=1, keepdims=True)
+    agent_widths = np.repeat(max_width, timesteps, axis=1).reshape(-1, 1)
 
-    future_times = future_times[type_mask]
-    future_velocity = future_velocity[type_mask]
+    agent_bbox_yaws = np.concatenate((data['state/current/bbox_yaw'], data['state/future/bbox_yaw']), axis=1)
+    agent_bbox_yaws = agent_bbox_yaws[type_mask].reshape(-1, 1)
 
-    is_valid_mask = data['state/future/valid'][type_mask] > 0.
+    agent_ids = data['state/id'][type_mask]
+    agent_ids = np.repeat(agent_ids[:, np.newaxis], timesteps, axis=1)
+
+    agent_times = np.concatenate((data['state/current/timestamp_micros'], data['state/future/timestamp_micros']), axis=1)
+    agent_times = agent_times / 1000000
+    agent_times = agent_times[type_mask]
+
+    # TODO: I believe for backwards flow we just need to shift the velocity back one
+    current_velocity = np.stack((data['state/current/velocity_x'], data['state/current/velocity_y']), axis=-1)
+    future_velocities = np.stack((data['state/future/velocity_x'], data['state/future/velocity_y']), axis=-1)
+    agent_velocities = np.concatenate((current_velocity, future_velocities), axis=1)
+    agent_velocities = rotate_points_around_origin(agent_velocities, angle)
+    agent_velocities = agent_velocities[type_mask]
+
+    is_valid = np.concatenate((data['state/current/valid'], data['state/future/valid']), axis=1)
+    is_valid_mask = is_valid[type_mask] > 0.
     point_mask = np.logical_and(fov_mask, is_valid_mask)
 
     agent_ids = agent_ids.reshape(-1, 1)
-    unobserved_positions = unobserved_positions.reshape(-1, 2)
-    future_times = future_times.reshape(-1, 1)
-    future_velocity = future_velocity.reshape(-1, 2)
+    agent_positions = agent_positions.reshape(-1, 2)
+    agent_times = agent_times.reshape(-1, 1)
+    agent_velocities = agent_velocities.reshape(-1, 2)
     point_mask = point_mask.reshape(-1)
 
     agent_ids = agent_ids[point_mask]
-    unobserved_positions = unobserved_positions[point_mask]
-    future_times = future_times[point_mask]
-    future_velocity = future_velocity[point_mask]
+    agent_positions = agent_positions[point_mask]
+    agent_times = agent_times[point_mask]
+    agent_velocities = agent_velocities[point_mask]
 
-    agent_length = agent_length[point_mask]
-    agent_width = agent_width[point_mask]
-    bbox_yaw = bbox_yaw[point_mask]
+    agent_lengths = agent_lengths[point_mask]
+    agent_widths = agent_widths[point_mask]
+    agent_bbox_yaws = agent_bbox_yaws[point_mask]
 
-    agent_ids = expand_to_bounding_box(unobserved_positions, agent_length, agent_width, agent_ids)
-    agent_centers = expand_to_bounding_box(unobserved_positions, agent_length, agent_width, unobserved_positions)
-    future_times = expand_to_bounding_box(unobserved_positions, agent_length, agent_width, future_times)
-    future_velocity = expand_to_bounding_box(unobserved_positions, agent_length, agent_width, future_velocity)
-    bbox_yaw = expand_to_bounding_box(unobserved_positions, agent_length, agent_width, bbox_yaw)
-    unobserved_positions = expand_to_bounding_box(unobserved_positions, agent_length, agent_width)
+    agent_ids = expand_to_bounding_box(agent_positions, agent_lengths, agent_widths, agent_ids)
+    agent_centers = expand_to_bounding_box(agent_positions, agent_lengths, agent_widths, agent_positions)
+    agent_times = expand_to_bounding_box(agent_positions, agent_lengths, agent_widths, agent_times)
+    agent_velocities = expand_to_bounding_box(agent_positions, agent_lengths, agent_widths, agent_velocities)
+    agent_bbox_yaws = expand_to_bounding_box(agent_positions, agent_lengths, agent_widths, agent_bbox_yaws)
+    agent_positions = expand_to_bounding_box(agent_positions, agent_lengths, agent_widths)
 
-    unobserved_positions = unobserved_positions - agent_centers
-    for i in range(unobserved_positions.shape[0]):
-        unobserved_positions[i] = rotate_points_around_origin(unobserved_positions[i], -bbox_yaw[i] - angle)
-    unobserved_positions = unobserved_positions + agent_centers
+    agent_positions = agent_positions - agent_centers
+    for i in range(agent_positions.shape[0]):
+        agent_positions[i] = rotate_points_around_origin(agent_positions[i], -agent_bbox_yaws[i] - angle)
+    agent_positions = agent_positions + agent_centers
 
     return (
         torch.FloatTensor(agent_ids), 
-        torch.FloatTensor(unobserved_positions), 
-        torch.FloatTensor(future_times), 
-        torch.FloatTensor(future_velocity)
+        torch.FloatTensor(agent_positions), 
+        torch.FloatTensor(agent_times), 
+        torch.FloatTensor(agent_velocities)
     )
 
 def pad_tensors(tensors, max_size):
@@ -623,44 +637,44 @@ def pad_tensors(tensors, max_size):
 def waymo_collate_fn(batch):
     road_maps = []
     agent_trajectories = []
-    agent_ids = []
-    unobserved_positions = []
-    future_times = []
-    future_velocities = []
+    flow_field_agent_ids = []
+    flow_field_positions = []
+    flow_field_times = []
+    flow_field_velocities = []
 
     for data in batch:
         road_maps.append(rasterize_road_map(data))
         agent_trajectories.append(collate_agent_trajectories(data))
         ids, pos, t, vel = collate_target_flow_field(data)
-        agent_ids.append(ids)
-        unobserved_positions.append(pos)
-        future_times.append(t)
-        future_velocities.append(vel)
+        flow_field_agent_ids.append(ids)
+        flow_field_positions.append(pos)
+        flow_field_times.append(t)
+        flow_field_velocities.append(vel)
 
     max_agents = max(t.shape[0] for t in agent_trajectories)
-    max_unobserved_positions = max(t.shape[0] for t in unobserved_positions)
+    max_agent_positions = max(p.shape[0] for p in flow_field_positions)
     agent_trajectories, agent_mask = pad_tensors(agent_trajectories, max_agents)
-    agent_ids, flow_field_mask = pad_tensors(agent_ids, max_unobserved_positions)
-    unobserved_positions, _ = pad_tensors(unobserved_positions, max_unobserved_positions)
-    future_times, _ = pad_tensors(future_times, max_unobserved_positions)
-    future_velocities, _ = pad_tensors(future_velocities, max_unobserved_positions)
+    flow_field_agent_ids, flow_field_mask = pad_tensors(flow_field_agent_ids, max_agent_positions)
+    flow_field_positions, _ = pad_tensors(flow_field_positions, max_agent_positions)
+    flow_field_times, _ = pad_tensors(flow_field_times, max_agent_positions)
+    flow_field_velocities, _ = pad_tensors(flow_field_velocities, max_agent_positions)
 
     road_map_batch = torch.stack(road_maps, dim=0)
     agent_trajectories_batch = torch.stack(agent_trajectories, dim=0)
-    agent_ids_batch = torch.stack(agent_ids, dim=0)
-    unobserved_positions_batch = torch.stack(unobserved_positions, dim=0)
-    future_times_batch = torch.stack(future_times, dim=0)
-    future_velocities_batch = torch.stack(future_velocities, dim=0)
+    flow_field_agent_ids_batch = torch.stack(flow_field_agent_ids, dim=0)
+    flow_field_positions_batch = torch.stack(flow_field_positions, dim=0)
+    flow_field_times_batch = torch.stack(flow_field_times, dim=0)
+    flow_field_velocities_batch = torch.stack(flow_field_velocities, dim=0)
     agent_mask_batch = torch.stack(agent_mask, dim=0)
     flow_field_mask_batch = torch.stack(flow_field_mask, dim=0)
 
     return (
         road_map_batch,
         agent_trajectories_batch,
-        agent_ids_batch,
-        unobserved_positions_batch,
-        future_times_batch,
-        future_velocities_batch,
+        flow_field_agent_ids_batch,
+        flow_field_positions_batch,
+        flow_field_times_batch,
+        flow_field_velocities_batch,
         agent_mask_batch,
         flow_field_mask_batch
     )
