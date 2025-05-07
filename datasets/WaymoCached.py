@@ -20,22 +20,25 @@ class WaymoCached(Dataset):
         return (
             sample['road_map'],
             sample['agent_trajectories'],
-            sample['unobserved_positions'],
-            sample['future_times'],
-            sample['target_velocity'],
+            sample['flow_field_agnet_ids'],
+            sample['flow_field_positions'],
+            sample['flow_field_times'],
+            sample['flow_field_velocities'],
             sample['agent_mask'],
             sample['flow_field_mask']
         )
 
-def cache_scene(road_map, agent_trajectories, 
-                unobserved_positions, future_times, target_velocity, 
-                agent_mask, flow_field_mask, path):
+def cache_scene(path,
+                road_map, agent_trajectories, 
+                flow_field_agnet_ids, flow_field_positions, flow_field_times, flow_field_velocities, 
+                agent_mask, flow_field_mask):
     scene = {
         'road_map': road_map,
         'agent_trajectories': agent_trajectories,
-        'unobserved_positions': unobserved_positions,
-        'future_times': future_times,
-        'target_velocity': target_velocity,
+        'flow_field_agnet_ids': flow_field_agnet_ids,
+        'flow_field_positions': flow_field_positions,
+        'flow_field_times': flow_field_times,
+        'flow_field_velocities': flow_field_velocities,
         'agent_mask': agent_mask,
         'flow_field_mask': flow_field_mask,
     }
@@ -45,14 +48,18 @@ def cache_data(dataloader, cache_dir):
     os.makedirs(cache_dir, exist_ok=True)
 
     idx = 0
-    for road_map, agent_trajectories, unobserved_positions, future_times, target_velocity, agent_mask, flow_field_mask in dataloader:
+    for batch in dataloader:
+        road_map, agent_trajectories, \
+        flow_field_agent_ids, flow_field_positions, flow_field_times, flow_field_velocities, \
+        agent_mask, flow_field_mask = batch
         for i in range(road_map.shape[0]):
             idx += 1
             path = os.path.join(cache_dir, f'sample{idx:06d}.pt')
-            cache_scene(road_map[i], agent_trajectories[i],
-                        unobserved_positions[i], future_times[i], target_velocity[i],
-                        agent_mask[i], flow_field_mask[i], path)
-            print(idx)
+            cache_scene(path,
+                        road_map[i], agent_trajectories[i],
+                        flow_field_agent_ids[i], flow_field_positions[i], flow_field_times[i], flow_field_velocities[i],
+                        agent_mask[i], flow_field_mask[i])
+            print(idx) # TODO: delete me
             
 # TODO: move this to a shared location
 def pad_tensors(tensors, max_size):
@@ -77,38 +84,43 @@ def pad_tensors(tensors, max_size):
 def waymo_cached_collate_fn(batch):
     road_maps = []
     agent_trajectories = []
-    unobserved_positions = []
-    future_times = []
-    future_velocities = []
+    flow_field_agent_ids = []
+    flow_field_positions = []
+    flow_field_times = []
+    flow_field_velocities = []
 
-    for road_map, trajectories, positions, times, velocities, _, _ in batch:
+    for road_map, trajectories, ids, positions, times, velocities, _, _ in batch:
         road_maps.append(road_map)
         agent_trajectories.append(trajectories)
-        unobserved_positions.append(positions)
-        future_times.append(times)
-        future_velocities.append(velocities)
+        flow_field_agent_ids.append(ids)
+        flow_field_positions.append(positions)
+        flow_field_times.append(times)
+        flow_field_velocities.append(velocities)
 
     max_agents = max(t.shape[0] for t in agent_trajectories)
-    max_unobserved_positions = max(t.shape[0] for t in unobserved_positions)
+    max_agent_positions = max(p.shape[0] for p in flow_field_positions)
     agent_trajectories, agent_mask = pad_tensors(agent_trajectories, max_agents)
-    unobserved_positions, flow_field_mask = pad_tensors(unobserved_positions, max_unobserved_positions)
-    future_times, _ = pad_tensors(future_times, max_unobserved_positions)
-    future_velocities, _ = pad_tensors(future_velocities, max_unobserved_positions)
+    flow_field_agent_ids, flow_field_mask = pad_tensors(flow_field_agent_ids, max_agent_positions)
+    flow_field_positions, _ = pad_tensors(flow_field_positions, max_agent_positions)
+    flow_field_times, _ = pad_tensors(flow_field_times, max_agent_positions)
+    flow_field_velocities, _ = pad_tensors(flow_field_velocities, max_agent_positions)
 
     road_map_batch = torch.stack(road_maps, dim=0)
     agent_trajectories_batch = torch.stack(agent_trajectories, dim=0)
-    unobserved_positions_batch = torch.stack(unobserved_positions, dim=0)
-    future_times_batch = torch.stack(future_times, dim=0)
-    future_velocities_batch = torch.stack(future_velocities, dim=0)
+    flow_field_agent_ids_batch = torch.stack(flow_field_agent_ids, dim=0)
+    flow_field_positions_batch = torch.stack(flow_field_positions, dim=0)
+    flow_field_times_batch = torch.stack(flow_field_times, dim=0)
+    flow_field_velocities_batch = torch.stack(flow_field_velocities, dim=0)
     agent_mask_batch = torch.stack(agent_mask, dim=0)
     flow_field_mask_batch = torch.stack(flow_field_mask, dim=0)
 
     return (
         road_map_batch,
         agent_trajectories_batch,
-        unobserved_positions_batch,
-        future_times_batch,
-        future_velocities_batch,
+        flow_field_agent_ids_batch,
+        flow_field_positions_batch,
+        flow_field_times_batch,
+        flow_field_velocities_batch,
         agent_mask_batch,
         flow_field_mask_batch
     )

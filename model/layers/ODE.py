@@ -63,5 +63,5 @@ class ODE(nn.Module):
 	
 	def solve_ivp(self, initial_value, integration_times, scene_context, mask=None):
 		state = (initial_value, scene_context)
-		states = odeint_adjoint(self.vector_field, state, integration_times, method='rk4', atol=1e-3, rtol=1e-3)
+		states = odeint_adjoint(self.vector_field, state, integration_times, method='euler')
 		return states
