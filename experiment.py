@@ -12,6 +12,7 @@ from datasets import WaymoCached, waymo_cached_collate_fn
 from model import OccupancyFlowNetwork
 from train import train
 from evaluate import evaluate
+from visualize import visualize
 
 @dataclass
 class TrainConfig:
@@ -20,6 +21,7 @@ class TrainConfig:
     initialize_from_checkpoint: bool
     should_train: bool
     should_evaluate: bool
+    should_visualize: bool
     train_path: str
     test_path: str
     batch_size: int
@@ -63,7 +65,6 @@ def prepare_dataset(config, is_train=True, distributed=False, rank=0, world_size
         batch_size=config.batch_size,
         sampler=sampler,
         shuffle=(sampler is None and is_train),
-        num_workers=min(config.batch_size, torch.get_num_threads()),
         collate_fn=waymo_cached_collate_fn,
         pin_memory=True
     )
@@ -82,18 +83,21 @@ def single_device_train(config):
         )
     
     model = build_model(config, device)
+
     train_dataloader = prepare_dataset(config, is_train=True, distributed=False)
     test_dataloader = prepare_dataset(config, is_train=False, distributed=False)
 
-    train(dataloader=train_dataloader, model=model, device=device, 
-          epochs=config.epochs, lr=config.lr, weight_decay=config.weight_decay, gamma=config.gamma,
-          logging_enabled=config.logging_enabled, checkpointing_enabled=config.checkpointing_enabled)
+    if config.should_train:
+        train(dataloader=train_dataloader, model=model, device=device, 
+              epochs=config.epochs, lr=config.lr, weight_decay=config.weight_decay, gamma=config.gamma,
+              logging_enabled=config.logging_enabled, checkpointing_enabled=config.checkpointing_enabled)
     
-    epe = evaluate(dataloader=test_dataloader, model=model, device=device)
+    if config.should_evaluate:
+        epe = evaluate(dataloader=test_dataloader, model=model, device=device)
 
-    if config.logging_enabled:
-        wandb.log({'epe': epe})
-        print(f'end point error: {epe}')
+        if config.logging_enabled:
+            wandb.log({'epe': epe})
+            print(f'end point error: {epe}')
 
 def distributed_train(rank, world_size, config, experiment_id):
     dist.init_process_group(backend='nccl', rank=rank, world_size=world_size)
@@ -114,15 +118,21 @@ def distributed_train(rank, world_size, config, experiment_id):
         train_dataloader = prepare_dataset(config, is_train=True, distributed=True, rank=rank, world_size=world_size)
         test_dataloader = prepare_dataset(config, is_train=False, distributed=True, rank=rank, world_size=world_size)
 
-        train(dataloader=train_dataloader, model=model, device=rank, 
-              epochs=config.epochs, lr=config.lr, weight_decay=config.weight_decay, gamma=config.gamma,
-              logging_enabled=config.logging_enabled, checkpointing_enabled=config.checkpointing_enabled)
+        if config.should_train:
+            train(dataloader=train_dataloader, model=model, device=rank, 
+                  epochs=config.epochs, lr=config.lr, weight_decay=config.weight_decay, gamma=config.gamma,
+                  logging_enabled=config.logging_enabled, checkpointing_enabled=config.checkpointing_enabled)
     
-        epe = evaluate(dataloader=test_dataloader, model=model, device=rank)
+        if config.should_evaluate:
+            epe = evaluate(dataloader=test_dataloader, model=model, device=rank)
 
-        if config.logging_enabled and rank==0:
-            wandb.log({'epe': epe})
-            print(f'end point error: {epe}')
+            if config.logging_enabled and rank==0:
+                wandb.log({'epe': epe})
+                print(f'end point error: {epe}')
+
+        if config.should_visualize:
+            visualize(dataloader=test_dataloader, model=model, device=rank, 
+                      num_samples=1)
     
     finally:
         dist.barrier()
@@ -137,14 +147,15 @@ def multi_device_train(config):
     mp.spawn(distributed_train, args=(world_size, config, experiment_id,), nprocs=world_size, join=True)
 
 if __name__ == '__main__':
-    data_parallel = False
+    data_parallel = True
     
     config = TrainConfig(
-        logging_enabled=True,
-        checkpointing_enabled=False,
+        logging_enabled=False,#True,
+        checkpointing_enabled=False,#True,
         initialize_from_checkpoint=False,
-        should_train=True,
-        should_evaluate=True,
+        should_train=False,#True,
+        should_evaluate=False,#True,
+        should_visualize=True,
         train_path = '../data1/waymo_dataset/v1.1/tensor_cache/training',
         test_path = '../data1/waymo_dataset/v1.1/tensor_cache/validation',
         batch_size=16,
