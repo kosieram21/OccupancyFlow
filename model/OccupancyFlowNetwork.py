@@ -10,7 +10,7 @@ class OccupancyFlowNetwork(nn.Module):
 				 flow_field_hidden_dim, flow_field_fourier_features):
 		super(OccupancyFlowNetwork, self).__init__()
 
-		self.scence_encoder = SceneEncoder(road_map_image_size, road_map_window_size, 
+		self.scene_encoder = SceneEncoder(road_map_image_size, road_map_window_size, 
 									 	   trajectory_feature_dim, 
 				 						   embedding_dim)
 			
@@ -19,9 +19,11 @@ class OccupancyFlowNetwork(nn.Module):
 							  flow_field_fourier_features)
 
 	def forward(self, t, h, road_map, agent_trajectories, agent_mask=None, flow_field_mask=None):
-		scene_context = self.scence_encoder(road_map, agent_trajectories, agent_mask)
+		scene_context = self.scene_encoder(road_map, agent_trajectories, agent_mask)
 		flow = self.flow_field(t, h, scene_context, flow_field_mask)
 		return flow
 	
 	def warp_occupancy(self, occupancy, integration_times, scene_context):
-		return self.flow_field.solve_ivp(occupancy, integration_times, scene_context)
+		estimated_occupancy, _ = self.flow_field.solve_ivp(occupancy, integration_times, scene_context)
+		estimated_occupancy = [estimated_occupancy[i] for i in range(estimated_occupancy.shape[0])]
+		return estimated_occupancy
