@@ -47,7 +47,10 @@ def build_model(config, device):
     ).to(device)
 
     if config.initialize_from_checkpoint:
-        model.load_state_dict(torch.load(f'checkpoints/occupancy_flow_checkpoint{config.epochs - 1}.pt'))
+        #model.load_state_dict(torch.load(f'checkpoints/occupancy_flow_checkpoint{config.epochs - 1}.pt'))
+        state_dict = torch.load('checkpoints/occupancy_flow_checkpoint73.pt')
+        corrected_state_dict = {k.replace("scence_encoder", "scene_encoder"): v for k, v in state_dict.items()}
+        model.load_state_dict(corrected_state_dict)
 
     return model
 
@@ -99,6 +102,10 @@ def single_device_train(config):
             wandb.log({'epe': epe})
             print(f'end point error: {epe}')
 
+    if config.should_visualize:
+        visualize(dataloader=test_dataloader, model=model, device=device, 
+                  num_samples=1)
+
 def distributed_train(rank, world_size, config, experiment_id):
     dist.init_process_group(backend='nccl', rank=rank, world_size=world_size)
     torch.cuda.set_device(rank)
@@ -147,14 +154,14 @@ def multi_device_train(config):
     mp.spawn(distributed_train, args=(world_size, config, experiment_id,), nprocs=world_size, join=True)
 
 if __name__ == '__main__':
-    data_parallel = True
+    data_parallel = False#True
     
     config = TrainConfig(
         logging_enabled=False,#True,
         checkpointing_enabled=False,#True,
-        initialize_from_checkpoint=False,
+        initialize_from_checkpoint=True,
         should_train=False,#True,
-        should_evaluate=False,#True,
+        should_evaluate=False,
         should_visualize=True,
         train_path = '../data1/waymo_dataset/v1.1/tensor_cache/training',
         test_path = '../data1/waymo_dataset/v1.1/tensor_cache/validation',

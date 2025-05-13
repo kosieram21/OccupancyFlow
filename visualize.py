@@ -123,14 +123,56 @@ def visualize(dataloader, model, device,
         flow_field_agent_ids, flow_field_positions, flow_field_times, flow_field_velocities, \
         agent_mask, flow_field_mask = batch
 
-        road_map = road_map[0].to(device)
-        agent_trajectories = agent_trajectories[0].to(device)
-        flow_field_positions = flow_field_positions[0].to(device)
-        flow_field_times = flow_field_times[0].to(device)
-        flow_field_velocities = flow_field_velocities[0].to(device)
-        agent_mask = agent_mask[0].to(device)
-        flow_field_mask = flow_field_mask[0].to(device)
+        print(flow_field_times.shape)
+
+        road_map = road_map[0].unsqueeze(0).to(device)
+        agent_trajectories = agent_trajectories[0].unsqueeze(0).to(device)
+        flow_field_positions = flow_field_positions[0].unsqueeze(0).to(device)
+        flow_field_times = flow_field_times[0].unsqueeze(0).to(device)
+        flow_field_velocities = flow_field_velocities[0].unsqueeze(0).to(device)
+        agent_mask = agent_mask[0].unsqueeze(0).to(device)
+        flow_field_mask = flow_field_mask[0].unsqueeze(0).to(device)
 
         groups = defaultdict(list)
-        [groups[round(val.item(), 1)].append(idx) for idx, val in enumerate(flow_field_times)]
+        [groups[round(val.item(), 1)].append(idx) for idx, val in enumerate(flow_field_times[0])]
         sorted_keys = sorted(groups.keys())
+        indices = groups[sorted_keys[1]]
+
+        initial_occupancy = flow_field_positions[0][indices].unsqueeze(0)
+        integration_times = torch.FloatTensor(sorted_keys).to(device)
+        scene_context = model.scene_encoder(road_map, agent_trajectories)
+        estimated_occupancy = model.warp_occupancy(initial_occupancy, integration_times, scene_context)
+
+        print(initial_occupancy.shape)
+        print(integration_times.shape)
+        print(scene_context.shape)
+        print(len(estimated_occupancy))
+        print(estimated_occupancy[0].shape)
+        print(integration_times[0].shape)
+
+        print('lets get the estimated occupancy')
+        positions = []
+        times = []
+        for i in range(1, len(estimated_occupancy)):
+            p = estimated_occupancy[i]
+            t = integration_times[i].view(1, 1, 1).expand(1, p.shape[1], 1)
+            positions.append(p[0])
+            times.append(t[0])
+
+        positions = torch.stack(positions).view(1, -1, 2)
+        times = torch.stack(times).view(1, -1, 1)
+        print(positions.shape)
+        print(times.shape)
+        estimated_flow = model(times, positions, road_map, agent_trajectories)
+        print(estimated_flow.shape)
+
+        root = f'visualization/sample{samples_processed}'
+
+        render_observed_scene_state(road_map[0].cpu(), agent_trajectories[0].cpu(), 
+                                    save_path=f'{root}/observed_scene_state.png')
+        
+        render_flow_field(road_map[0].cpu(), flow_field_times[0].cpu(), flow_field_positions[0].cpu(), flow_field_velocities[0].cpu(), 
+                          save_path=f'{root}/ground_truth_occupancy_and_flow.gif')
+        
+        render_flow_field(road_map[0].cpu(), times[0].detach().cpu(), positions[0].detach().cpu(), estimated_flow[0].detach().cpu(), 
+                          save_path=f'{root}/estimated_occupancy_and_flow.gif')

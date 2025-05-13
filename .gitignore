@@ -1,6 +1,7 @@
 __pycache__/
 wandb/
 checkpoints/
+visualization/
 
 *.png
 *.gif
