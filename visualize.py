@@ -1,5 +1,6 @@
 import os
 import math
+import torch
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
@@ -9,7 +10,7 @@ from datasets.Waymo import get_image_coordinates, get_image_velocity, rotate_poi
 
 def render_observed_scene_state(road_map, agent_trajectories, save_path=None):
     image_buffer = road_map.numpy() / 255.0
-
+    
     fig, ax = plt.subplots()
     ax.imshow(image_buffer)
     ax.set_xlim(0, image_buffer.shape[1])
@@ -62,9 +63,10 @@ def render_observed_scene_state(road_map, agent_trajectories, save_path=None):
     if save_path is not None:
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         plt.savefig(save_path, bbox_inches='tight', dpi=300)
-        plt.close()
     else:
         plt.show()
+
+    plt.close(fig)
 
 def render_flow_field(road_map, times, positions, velocity, save_path=None):
     image_buffer = road_map.numpy() / 255.0
@@ -107,3 +109,28 @@ def render_flow_field(road_map, times, positions, velocity, save_path=None):
     plt.close(fig)
 
     return anim
+
+def visualize(dataloader, model, device, 
+              num_samples):
+    samples_processed = 0
+
+    for batch in dataloader:
+        samples_processed += 1
+        if samples_processed > num_samples:
+            return
+
+        road_map, agent_trajectories, \
+        flow_field_agent_ids, flow_field_positions, flow_field_times, flow_field_velocities, \
+        agent_mask, flow_field_mask = batch
+
+        road_map = road_map[0].to(device)
+        agent_trajectories = agent_trajectories[0].to(device)
+        flow_field_positions = flow_field_positions[0].to(device)
+        flow_field_times = flow_field_times[0].to(device)
+        flow_field_velocities = flow_field_velocities[0].to(device)
+        agent_mask = agent_mask[0].to(device)
+        flow_field_mask = flow_field_mask[0].to(device)
+
+        groups = defaultdict(list)
+        [groups[round(val.item(), 1)].append(idx) for idx, val in enumerate(flow_field_times)]
+        sorted_keys = sorted(groups.keys())
