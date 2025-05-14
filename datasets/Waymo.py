@@ -322,7 +322,7 @@ def get_world_coordinates(image_points):
     return world_points
 
 def get_image_velocity(world_velocity):
-    scale = np.array([PIXELS_PER_METER, PIXELS_PER_METER])
+    scale = np.array([PIXELS_PER_METER, PIXELS_PER_METER]) # TODO: since we negate the y position we also need to negate the y velocity here
     image_velocity = world_velocity * scale
     return image_velocity
 
@@ -543,7 +543,7 @@ def collate_target_flow_field(data):
     agent_positions = agent_positions.reshape(-1, xy)
     
     centered_and_rotated_agent_positions, angle, translation = normalize_about_sdc(agent_positions, data)
-    centered_and_rotated_agent_positions[:, 1] = -centered_and_rotated_agent_positions[:, 1] # If we invert y positions we must also invery y velocity
+    centered_and_rotated_agent_positions[:, 1] = -centered_and_rotated_agent_positions[:, 1] # TODO: If we invert y positions we must also invert y velocity
     centered_and_rotated_image_agent_positions = get_image_coordinates(centered_and_rotated_agent_positions)
 
     fov_mask = get_fov_mask(centered_and_rotated_image_agent_positions)
