@@ -198,13 +198,13 @@ def visualize(dataloader, model, device,
                           flow_field_times[0].cpu(), 
                           flow_field_positions[0].cpu(), 
                           estimated_flow_at_ground_truth_occupancy[0].detach().cpu(), 
-                          save_path=f'{root}/estimated_occupancy_and_flow_at_ground_truth_occupancy.gif')
+                          save_path=f'{root}/estimated_flow_at_ground_truth_occupancy.gif')
         
         render_flow_field(road_map[0].cpu(), 
                           times[0].detach().cpu(), 
                           positions[0].detach().cpu(), 
                           estimated_flow_at_initial_occupancy[0].detach().cpu(), 
-                          save_path=f'{root}/estimated_occupancy_and_flow_at_initial_occupancy.gif')
+                          save_path=f'{root}/estimated_occupancy_and_flow_unoccluded.gif')
         
         render_flow_field(road_map[0].cpu(), 
                           grid_times[0].detach().cpu(), 
