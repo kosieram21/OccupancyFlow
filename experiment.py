@@ -104,7 +104,7 @@ def single_device_train(config):
 
     if config.should_visualize:
         visualize(dataloader=test_dataloader, model=model, device=device, 
-                  num_samples=1)
+                  num_samples=10)
 
 def distributed_train(rank, world_size, config, experiment_id):
     dist.init_process_group(backend='nccl', rank=rank, world_size=world_size)
@@ -161,7 +161,7 @@ if __name__ == '__main__':
         checkpointing_enabled=False,#True,
         initialize_from_checkpoint=True,
         should_train=False,#True,
-        should_evaluate=False,
+        should_evaluate=False,#True,
         should_visualize=True,
         train_path = '../data1/waymo_dataset/v1.1/tensor_cache/training',
         test_path = '../data1/waymo_dataset/v1.1/tensor_cache/validation',

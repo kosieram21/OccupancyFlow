@@ -533,6 +533,7 @@ def expand_to_bounding_box(positions, lengths, widths, values = None, step_size=
 def collate_target_flow_field(data):
     type_mask = data['state/type'] == 1 #TODO alloow for other road user types
 
+    # TODO: I think there is a bug with current here... it seems there are
     current_position = np.stack((data['state/current/x'], data['state/current/y']), axis=-1)
     future_positions = np.stack((data['state/future/x'], data['state/future/y']), axis=-1)
     agent_positions = np.concatenate((current_position, future_positions), axis=1)
@@ -542,7 +543,7 @@ def collate_target_flow_field(data):
     agent_positions = agent_positions.reshape(-1, xy)
     
     centered_and_rotated_agent_positions, angle, translation = normalize_about_sdc(agent_positions, data)
-    centered_and_rotated_agent_positions[:, 1] = -centered_and_rotated_agent_positions[:, 1]
+    centered_and_rotated_agent_positions[:, 1] = -centered_and_rotated_agent_positions[:, 1] # If we invert y positions we must also invery y velocity
     centered_and_rotated_image_agent_positions = get_image_coordinates(centered_and_rotated_agent_positions)
 
     fov_mask = get_fov_mask(centered_and_rotated_image_agent_positions)
