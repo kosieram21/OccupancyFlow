@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchdiffeq import odeint_adjoint
+from torchdiffeq import odeint#_adjoint
 from model.layers.FiLM import FiLM
 	
 class ODEFunc(nn.Module):
@@ -68,5 +68,6 @@ class ODE(nn.Module):
 	
 	def solve_ivp(self, initial_value, integration_times, scene_context, mask=None):
 		state = (initial_value, scene_context)
-		states = odeint_adjoint(self.vector_field, state, integration_times, method='euler')
+		#states = odeint_adjoint(self.vector_field, state, integration_times, method='euler')
+		states = odeint(self.vector_field, state, integration_times, method='euler')
 		return states
