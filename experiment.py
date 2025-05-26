@@ -15,7 +15,8 @@ from evaluate import evaluate
 from visualize import visualize
 
 @dataclass
-class TrainConfig:
+class ExperimentConfig:
+    data_parallel: bool
     logging_enabled: bool
     checkpointing_enabled: bool
     initialize_from_checkpoint: bool
@@ -49,7 +50,7 @@ def build_model(config, device):
     if config.initialize_from_checkpoint:
         #model.load_state_dict(torch.load(f'checkpoints/occupancy_flow_checkpoint{config.epochs - 1}.pt'))
         state_dict = torch.load('checkpoints/occupancy_flow_checkpoint73.pt')
-        corrected_state_dict = {k.replace("scence_encoder", "scene_encoder"): v for k, v in state_dict.items()}
+        corrected_state_dict = {k.replace("scence_encoder", "scene_encoder"): v for k, v in state_dict.items()} # TODO: delete me
         model.load_state_dict(corrected_state_dict)
 
     return model
@@ -154,9 +155,8 @@ def multi_device_train(config):
     mp.spawn(distributed_train, args=(world_size, config, experiment_id,), nprocs=world_size, join=True)
 
 if __name__ == '__main__':
-    data_parallel = False#True
-    
-    config = TrainConfig(
+    config = ExperimentConfig(
+        data_parallel = False,#True,
         logging_enabled=False,#True,
         checkpointing_enabled=False,#True,
         initialize_from_checkpoint=True,
@@ -181,7 +181,7 @@ if __name__ == '__main__':
     if config.logging_enabled:
         wandb.login()
 
-    if torch.cuda.is_available() and data_parallel:
+    if torch.cuda.is_available() and config.data_parallel:
         multi_device_train(config)
     else:
         single_device_train(config)

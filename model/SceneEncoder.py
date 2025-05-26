@@ -1,4 +1,3 @@
-import torch
 import torch.nn as nn
 from model.layers import GRU
 from model.layers import SelfAttentionTransformer
