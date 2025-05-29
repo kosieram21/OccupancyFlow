@@ -52,7 +52,7 @@ def render_observed_scene_state(road_map, agent_trajectories, save_path=None):
         )
 
         heading = np.array([[0.75 * agent_length, 0]])
-        heading = rotate_points_around_origin(heading, -agent_bbox_yaw)
+        heading = rotate_points_around_origin(heading, agent_bbox_yaw)
         heading = get_image_velocity(heading)[0]
         center = get_image_coordinates(np.array([[agent_x, agent_y]]))[0]
         ax.arrow(center[0], center[1],
@@ -114,11 +114,11 @@ def render_flow_at_ground_truth_occupancy(model, road_map,
                                           times, positions, scene_context,
                                           save_path=None):
     estimated_flow_at_ground_truth_occupancy = model.flow_field(times, positions, scene_context)
-    render_flow_at_spacetime(road_map[0].cpu(), 
-                             times[0].cpu(), 
-                             positions[0].cpu(), 
-                             estimated_flow_at_ground_truth_occupancy[0].detach().cpu(), 
-                             save_path=save_path)
+    return render_flow_at_spacetime(road_map[0].cpu(), 
+                                    times[0].cpu(), 
+                                    positions[0].cpu(), 
+                                    estimated_flow_at_ground_truth_occupancy[0].detach().cpu(), 
+                                    save_path=save_path)
     
 def render_occupancy_and_flow_unoccluded(model, road_map,
                                          times, positions, scene_context,
@@ -144,11 +144,11 @@ def render_occupancy_and_flow_unoccluded(model, road_map,
     factored_times = torch.stack(factored_times).view(1, -1, 1)
 
     estimated_flow_at_initial_occupancy = model.flow_field(factored_times, factored_positions, scene_context)
-    render_flow_at_spacetime(road_map[0].cpu(), 
-                             factored_times[0].detach().cpu(), 
-                             factored_positions[0].detach().cpu(), 
-                             estimated_flow_at_initial_occupancy[0].detach().cpu(), 
-                             save_path=save_path)
+    return render_flow_at_spacetime(road_map[0].cpu(), 
+                                    factored_times[0].detach().cpu(), 
+                                    factored_positions[0].detach().cpu(), 
+                                    estimated_flow_at_initial_occupancy[0].detach().cpu(), 
+                                    save_path=save_path)
     
 def render_flow_field(model, road_map, 
                       grid_size, stride, timesteps, freq, scene_context,
@@ -173,17 +173,16 @@ def render_flow_field(model, road_map,
     grid_times = grid_times.to(road_map.device)
 
     estimated_flow_at_grid = model.flow_field(grid_times, grid_points, scene_context)
-    render_flow_at_spacetime(road_map[0].cpu(), 
-                             grid_times[0].detach().cpu(), 
-                             grid_points[0].detach().cpu(), 
-                             estimated_flow_at_grid[0].detach().cpu(), 
-                             save_path=save_path)
+    return render_flow_at_spacetime(road_map[0].cpu(), 
+                                    grid_times[0].detach().cpu(), 
+                                    grid_points[0].detach().cpu(), 
+                                    estimated_flow_at_grid[0].detach().cpu(), 
+                                    save_path=save_path)
 
 def visualize(dataloader, model, device, 
               num_samples):
     samples_processed = 0
 
-    # TODO: consider every sample in batch
     for batch in dataloader:
         road_map, agent_trajectories, \
         flow_field_agent_ids, flow_field_positions, flow_field_times, flow_field_velocities, \

@@ -7,7 +7,6 @@ from model.layers.FiLM import FiLM
 class ODEFunc(nn.Module):
 	def __init__(self, input_dim, condition_dim, hidden_dims, num_fourier_features):
 		super(ODEFunc, self).__init__()
-		self.invert_y = False #TODO: DELETE ME
 		self.num_fourier_features = num_fourier_features
 
 		fourier_expanded_dim = input_dim + (input_dim * num_fourier_features)
@@ -41,9 +40,6 @@ class ODEFunc(nn.Module):
 			h_dot = layer(context, h_dot)
 			if l < len(self.layers) - 1:
 				h_dot = F.tanh(h_dot)
-
-		if self.invert_y: # TODO: DELETE ME
-			h_dot[...,1] = -h_dot[...,1]
 
 		return h_dot
 	

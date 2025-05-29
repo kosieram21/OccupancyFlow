@@ -322,12 +322,12 @@ def get_world_coordinates(image_points):
     return world_points
 
 def get_image_velocity(world_velocity):
-    scale = np.array([PIXELS_PER_METER, PIXELS_PER_METER]) # TODO: since we negate the y position we also need to negate the y velocity here
+    scale = np.array([PIXELS_PER_METER, -PIXELS_PER_METER])
     image_velocity = world_velocity * scale
     return image_velocity
 
 def get_world_velocity(image_velocity):
-    scale = np.array([PIXELS_PER_METER, PIXELS_PER_METER])
+    scale = np.array([PIXELS_PER_METER, -PIXELS_PER_METER])
     world_velocity = image_velocity / scale
     return world_velocity
 
@@ -368,7 +368,7 @@ def collate_agent_trajectories(data):
         data['state/past/length'],
         past_vel_yaw, 
         past_velocity[:, :, 0],
-        past_velocity[:, :, 1],
+        -past_velocity[:, :, 1],
         data['state/past/timestamp_micros'] / 1000000
     ), axis=-1)
     past_states_valid = data['state/past/valid'] > 0.
@@ -383,7 +383,7 @@ def collate_agent_trajectories(data):
         data['state/current/length'],
         current_vel_yaw, 
         current_velocity[:, :, 0],
-        current_velocity[:, :, 1],
+        -current_velocity[:, :, 1],
         data['state/current/timestamp_micros'] / 1000000
     ), axis=-1)
     current_states_valid = data['state/current/valid'] > 0.
@@ -543,7 +543,7 @@ def collate_target_flow_field(data):
     agent_positions = agent_positions.reshape(-1, xy)
     
     centered_and_rotated_agent_positions, angle, translation = normalize_about_sdc(agent_positions, data)
-    centered_and_rotated_agent_positions[:, 1] = -centered_and_rotated_agent_positions[:, 1] # TODO: If we invert y positions we must also invert y velocity
+    centered_and_rotated_agent_positions[:, 1] = -centered_and_rotated_agent_positions[:, 1]
     centered_and_rotated_image_agent_positions = get_image_coordinates(centered_and_rotated_agent_positions)
 
     fov_mask = get_fov_mask(centered_and_rotated_image_agent_positions)
@@ -585,11 +585,11 @@ def collate_target_flow_field(data):
     agent_times = agent_times.reshape(-1, 1)
     agent_times = agent_times[point_mask]
 
-    # TODO: I believe for backwards flow we just need to shift the velocity back one
     current_velocity = np.stack((data['state/current/velocity_x'], data['state/current/velocity_y']), axis=-1)
     future_velocities = np.stack((data['state/future/velocity_x'], data['state/future/velocity_y']), axis=-1)
     agent_velocities = np.concatenate((current_velocity, future_velocities), axis=1)
     agent_velocities = rotate_points_around_origin(agent_velocities, angle)
+    agent_velocities[:, :, 1] = -agent_velocities[:, :, 1]
     agent_velocities = agent_velocities[type_mask]
     agent_velocities = agent_velocities.reshape(-1, 2)
     agent_velocities = agent_velocities[point_mask]

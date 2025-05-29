@@ -24,8 +24,6 @@ class OccupancyFlowNetwork(nn.Module):
 		return flow
 	
 	def warp_occupancy(self, occupancy, integration_times, scene_context):
-		self.flow_field.vector_field.invert_y = True # we should not need this
 		estimated_occupancy, _ = self.flow_field.solve_ivp(occupancy, integration_times, scene_context)
-		self.flow_field.vector_field.invert_y = False
 		estimated_occupancy = [estimated_occupancy[i] for i in range(estimated_occupancy.shape[0])]
 		return estimated_occupancy
