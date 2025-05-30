@@ -533,7 +533,6 @@ def expand_to_bounding_box(positions, lengths, widths, values = None, step_size=
 def collate_target_flow_field(data):
     type_mask = data['state/type'] == 1 #TODO alloow for other road user types
 
-    # TODO: I think there is a bug with current here... it seems there are
     past_positions = np.stack((data['state/past/x'], data['state/past/y']), axis=-1)
     current_position = np.stack((data['state/current/x'], data['state/current/y']), axis=-1)
     future_positions = np.stack((data['state/future/x'], data['state/future/y']), axis=-1)
