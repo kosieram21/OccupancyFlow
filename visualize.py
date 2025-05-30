@@ -111,7 +111,8 @@ def render_flow_at_spacetime(road_map, times, positions, velocity, save_path=Non
     return anim
 
 def render_flow_at_ground_truth_occupancy(model, road_map,
-                                          times, positions, scene_context,
+                                          times, positions,
+                                          scene_context,
                                           save_path=None):
     estimated_flow_at_ground_truth_occupancy = model.flow_field(times, positions, scene_context)
     return render_flow_at_spacetime(road_map[0].cpu(), 
@@ -121,15 +122,17 @@ def render_flow_at_ground_truth_occupancy(model, road_map,
                                     save_path=save_path)
     
 def render_occupancy_and_flow_unoccluded(model, road_map,
-                                         times, positions, scene_context,
+                                         times, positions, 
+                                         initial_time, 
+                                         scene_context,
                                          save_path=None):
     groups = defaultdict(list)
     [groups[round(val.item(), 1)].append(idx) for idx, val in enumerate(times[0])]
     sorted_keys = sorted(groups.keys())
-    indices = groups[sorted_keys[1]]
+    indices = groups[sorted_keys[initial_time]]
 
     initial_occupancy = positions[0][indices].unsqueeze(0)
-    integration_times = torch.FloatTensor(sorted_keys[1:]).to(road_map.device)
+    integration_times = torch.FloatTensor(sorted_keys[initial_time:]).to(road_map.device)
     estimated_occupancy = model.warp_occupancy(initial_occupancy, integration_times, scene_context)
 
     factored_positions = []
@@ -151,7 +154,8 @@ def render_occupancy_and_flow_unoccluded(model, road_map,
                                     save_path=save_path)
     
 def render_flow_field(model, road_map, 
-                      grid_size, stride, timesteps, freq, scene_context,
+                      grid_size, stride, timesteps, freq, 
+                      scene_context,
                       save_path=None):
     y_coords = np.arange(0, grid_size, stride)
     x_coords = np.arange(0, grid_size, stride)
@@ -165,7 +169,7 @@ def render_flow_field(model, road_map,
     grid_points = grid_points.repeat(timesteps, 1)
     grid_points = grid_points.reshape(-1, 2).unsqueeze(0)
 
-    grid_times = [1.1 + t / freq for t in range(timesteps)]
+    grid_times = [t / freq for t in range(timesteps)]
     grid_times = torch.FloatTensor(grid_times)
     grid_times = grid_times.repeat_interleave(num_cells).unsqueeze(0).unsqueeze(-1)
 
@@ -224,15 +228,15 @@ def visualize(dataloader, model, device,
                                                  road_map=sample_road_map,
                                                  times=sample_flow_field_times, 
                                                  positions=sample_flow_field_positions, 
+                                                 initial_time=11,
                                                  scene_context=scene_context,
                                                  save_path=f'{root}/estimated_occupancy_and_flow_unoccluded.gif')
         
-            # TODO: can we get the time steps from tensor shapes?
             render_flow_field(model=model,
                               road_map=sample_road_map,
                               grid_size=sample_road_map[0].shape[0], 
                               stride=10, 
-                              timesteps=80, 
+                              timesteps=91, 
                               freq=10,
                               scene_context=scene_context,
                               save_path=f'{root}/flow_field.gif')

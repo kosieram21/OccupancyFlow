@@ -534,9 +534,10 @@ def collate_target_flow_field(data):
     type_mask = data['state/type'] == 1 #TODO alloow for other road user types
 
     # TODO: I think there is a bug with current here... it seems there are
+    past_positions = np.stack((data['state/past/x'], data['state/past/y']), axis=-1)
     current_position = np.stack((data['state/current/x'], data['state/current/y']), axis=-1)
     future_positions = np.stack((data['state/future/x'], data['state/future/y']), axis=-1)
-    agent_positions = np.concatenate((current_position, future_positions), axis=1)
+    agent_positions = np.concatenate((past_positions, current_position, future_positions), axis=1)
     agent_positions = agent_positions[type_mask]
 
     max_agents, timesteps, xy = agent_positions.shape
@@ -549,24 +550,24 @@ def collate_target_flow_field(data):
     fov_mask = get_fov_mask(centered_and_rotated_image_agent_positions)
     fov_mask = fov_mask.reshape(max_agents, timesteps)
 
-    is_valid = np.concatenate((data['state/current/valid'], data['state/future/valid']), axis=1)
+    is_valid = np.concatenate((data['state/past/valid'], data['state/current/valid'], data['state/future/valid']), axis=1)
     is_valid_mask = is_valid[type_mask] > 0.
     point_mask = np.logical_and(fov_mask, is_valid_mask)
     point_mask = point_mask.reshape(-1)
 
-    agent_lengths = np.concatenate((data['state/current/length'], data['state/future/length']), axis=1)
+    agent_lengths = np.concatenate((data['state/past/length'], data['state/current/length'], data['state/future/length']), axis=1)
     agent_lengths = agent_lengths[type_mask]
     max_length = np.max(agent_lengths, axis=1, keepdims=True)
     agent_lengths = np.repeat(max_length, timesteps, axis=1).reshape(-1, 1)
     agent_lengths = agent_lengths[point_mask]
     
-    agent_widths = np.concatenate((data['state/current/width'], data['state/future/width']), axis=1)
+    agent_widths = np.concatenate((data['state/past/width'], data['state/current/width'], data['state/future/width']), axis=1)
     agent_widths = agent_widths[type_mask]
     max_width = np.max(agent_widths, axis=1, keepdims=True)
     agent_widths = np.repeat(max_width, timesteps, axis=1).reshape(-1, 1)
     agent_widths = agent_widths[point_mask]
 
-    agent_bbox_yaws = np.concatenate((data['state/current/bbox_yaw'], data['state/future/bbox_yaw']), axis=1)
+    agent_bbox_yaws = np.concatenate((data['state/past/bbox_yaw'], data['state/current/bbox_yaw'], data['state/future/bbox_yaw']), axis=1)
     agent_bbox_yaws = agent_bbox_yaws[type_mask].reshape(-1, 1)
     agent_bbox_yaws = agent_bbox_yaws[point_mask]
 
@@ -579,15 +580,16 @@ def collate_target_flow_field(data):
     agent_positions = agent_positions.reshape(-1, 2)
     agent_positions = agent_positions[point_mask]
 
-    agent_times = np.concatenate((data['state/current/timestamp_micros'], data['state/future/timestamp_micros']), axis=1)
+    agent_times = np.concatenate((data['state/past/timestamp_micros'], data['state/current/timestamp_micros'], data['state/future/timestamp_micros']), axis=1)
     agent_times = agent_times / 1000000
     agent_times = agent_times[type_mask]
     agent_times = agent_times.reshape(-1, 1)
     agent_times = agent_times[point_mask]
 
+    past_velocities = np.stack((data['state/past/velocity_x'], data['state/past/velocity_y']), axis=-1)
     current_velocity = np.stack((data['state/current/velocity_x'], data['state/current/velocity_y']), axis=-1)
     future_velocities = np.stack((data['state/future/velocity_x'], data['state/future/velocity_y']), axis=-1)
-    agent_velocities = np.concatenate((current_velocity, future_velocities), axis=1)
+    agent_velocities = np.concatenate((past_velocities, current_velocity, future_velocities), axis=1)
     agent_velocities = rotate_points_around_origin(agent_velocities, angle)
     agent_velocities[:, :, 1] = -agent_velocities[:, :, 1]
     agent_velocities = agent_velocities[type_mask]
