@@ -156,13 +156,13 @@ def multi_device_train(config):
 
 if __name__ == '__main__':
     config = ExperimentConfig(
-        data_parallel = False,#True,
-        logging_enabled=False,#True,
-        checkpointing_enabled=False,#True,
-        initialize_from_checkpoint=True,
-        should_train=False,#True,
-        should_evaluate=False,#True,
-        should_visualize=True,
+        data_parallel=True,
+        logging_enabled=True,
+        checkpointing_enabled=True,
+        initialize_from_checkpoint=False,
+        should_train=True,
+        should_evaluate=True,
+        should_visualize=False,
         train_path = '../data1/waymo_dataset/v1.1/tensor_cache/training',
         test_path = '../data1/waymo_dataset/v1.1/tensor_cache/validation',
         batch_size=16,
@@ -175,7 +175,7 @@ if __name__ == '__main__':
         trajectory_feature_dim=10,
         embedding_dim=256,
         flow_field_hidden_dim=256,
-        flow_field_fourier_features=128
+        flow_field_fourier_features=0#128
     )
 
     if config.logging_enabled:
