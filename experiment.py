@@ -48,10 +48,12 @@ def build_model(config, device):
     ).to(device)
 
     if config.initialize_from_checkpoint:
-        #model.load_state_dict(torch.load(f'checkpoints/occupancy_flow_checkpoint{config.epochs - 1}.pt'))
-        state_dict = torch.load('checkpoints/occupancy_flow_checkpoint73.pt')
-        corrected_state_dict = {k.replace("scence_encoder", "scene_encoder"): v for k, v in state_dict.items()} # TODO: delete me
-        model.load_state_dict(corrected_state_dict)
+        model.load_state_dict(torch.load(f'checkpoints/occupancy_flow_checkpoint{config.epochs - 1}.pt'))
+        # TODO: delete the alternative model loading logic
+        #checkpoint = 1
+        #state_dict = torch.load(f'checkpoints/occupancy_flow_checkpoint{checkpoint}.pt')
+        #corrected_state_dict = {k.replace("scence_encoder", "scene_encoder"): v for k, v in state_dict.items()} # TODO: delete me
+        #model.load_state_dict(corrected_state_dict)
 
     return model
 
@@ -69,6 +71,7 @@ def prepare_dataset(config, is_train=True, distributed=False, rank=0, world_size
         batch_size=config.batch_size,
         sampler=sampler,
         shuffle=(sampler is None and is_train),
+        num_workers=min(config.batch_size, torch.get_num_threads()),
         collate_fn=waymo_cached_collate_fn,
         pin_memory=True
     )
@@ -159,12 +162,12 @@ if __name__ == '__main__':
         data_parallel=True,
         logging_enabled=True,
         checkpointing_enabled=True,
-        initialize_from_checkpoint=False,
-        should_train=True,
+        initialize_from_checkpoint=True,#False,
+        should_train=False,#True,
         should_evaluate=True,
         should_visualize=False,
-        train_path = '../data1/waymo_dataset/v1.1/tensor_cache/training',
-        test_path = '../data1/waymo_dataset/v1.1/tensor_cache/validation',
+        train_path='../data1/waymo_dataset/v1.1/tensor_cache/training',
+        test_path='../data1/waymo_dataset/v1.1/tensor_cache/validation',
         batch_size=16,
         epochs=100,
         lr=1e-4,

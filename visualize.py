@@ -85,7 +85,7 @@ def render_flow_at_spacetime(road_map, times, positions, velocity, save_path=Non
         ax.invert_yaxis()
         ax.axis('off')
 
-        time = list(sorted_keys)[frame]
+        time = sorted_keys[frame]
         indices = groups[time]
     
         group_positions = get_image_coordinates(positions[indices])
@@ -203,6 +203,7 @@ def visualize(dataloader, model, device,
             sample_flow_field_times = flow_field_times[i].unsqueeze(0).to(device)
             sample_flow_field_velocities = flow_field_velocities[i].unsqueeze(0).to(device)
 
+            # TODO: this does not work with ddp... need to extract underlying model
             scene_context = model.scene_encoder(sample_road_map, sample_agent_trajectories)
 
             root = f'visualization/sample{samples_processed}'
