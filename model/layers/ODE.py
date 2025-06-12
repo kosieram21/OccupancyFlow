@@ -67,3 +67,26 @@ class ODE(nn.Module):
 		#states = odeint_adjoint(self.vector_field, state, integration_times, method='euler')
 		states = odeint(self.vector_field, state, integration_times, method='euler')
 		return states
+	
+	def solve_ivp2(self, initial_value, integration_times, scene_context, mask=None):
+		state = (initial_value, scene_context)
+		states = self.forward_euler(state, integration_times)
+		return states
+	
+	def forward_euler(self, h0, integration_times):
+		num_components = len(h0)
+		hs = tuple([] for _ in range(num_components))
+		h = h0
+		
+		for i in range(num_components):
+			hs[i].append(h[i])
+			
+		for i in range(1, len(integration_times)):
+			dt = integration_times[i] - integration_times[i - 1] # floating point rounding errors...
+			dh = self.vector_field(integration_times[i - 1], h)
+			
+			for j in range(num_components):
+				hs[j].append(h[j] + dt * dh[j])
+				
+		hs = tuple(torch.stack(h_list, dim=0) for h_list in hs)
+		return hs

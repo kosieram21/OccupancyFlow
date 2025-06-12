@@ -1,3 +1,4 @@
+import torch # TODO: delete me
 import torch.nn as nn
 from model.layers.ODE import ODE
 from model.SceneEncoder import SceneEncoder
@@ -23,7 +24,10 @@ class OccupancyFlowNetwork(nn.Module):
 		flow = self.flow_field(t, h, scene_context, flow_field_mask)
 		return flow
 	
-	def warp_occupancy(self, occupancy, integration_times, scene_context):
-		estimated_occupancy, _ = self.flow_field.solve_ivp(occupancy, integration_times, scene_context)
+	def warp_occupancy(self, occupancy, integration_times, scene_context, use_custom=False):
+		if use_custom:
+			estimated_occupancy, _ = self.flow_field.solve_ivp2(occupancy, integration_times, scene_context)
+		else:
+			estimated_occupancy, _ = self.flow_field.solve_ivp(occupancy, integration_times, scene_context)
 		estimated_occupancy = [estimated_occupancy[i] for i in range(estimated_occupancy.shape[0])]
 		return estimated_occupancy
