@@ -81,12 +81,14 @@ class ODE(nn.Module):
 		for i in range(num_components):
 			hs[i].append(h[i])
 			
-		for i in range(1, len(integration_times)):
-			dt = integration_times[i] - integration_times[i - 1] # floating point rounding errors...
-			dh = self.vector_field(integration_times[i - 1], h)
+		for t0, t1 in zip(integration_times[:-1], integration_times[1:]):
+			dt = t1 - t0
+			dh = self.vector_field(t0, h)
+
+			h = tuple(h_i + dt * dh_i for h_i, dh_i in zip(h, dh))
 			
-			for j in range(num_components):
-				hs[j].append(h[j] + dt * dh[j])
+			for i in range(num_components):
+				hs[i].append(h[i])
 				
 		hs = tuple(torch.stack(h_list, dim=0) for h_list in hs)
 		return hs
