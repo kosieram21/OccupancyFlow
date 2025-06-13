@@ -106,17 +106,16 @@ class ODE(nn.Module):
 		t0 = integration_times[0]
 		h = torch.cat(initial_values[int(t0 * 10)], dim=0).unsqueeze(0)
 		hs = [h]
-		print(h.shape)
 			
 		for t0, t1 in zip(integration_times[:-1], integration_times[1:]):
 			dt = t1 - t0
 			dh = self.vector_field.forward2(t0, h, scene_context)
 			h = h + dt * dh
+
 			if initial_values[int(t1 * 10)]:
 				hx = torch.cat(initial_values[int(t1 * 10)], dim=0).unsqueeze(0)
-				print(h.shape)
-				print(hx.shape)
 				h = torch.cat([h, hx], dim=1)
+			
 			hs.append(h)
 
 		return hs
