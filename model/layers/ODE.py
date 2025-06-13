@@ -9,7 +9,7 @@ class ODEFunc(nn.Module):
 		super(ODEFunc, self).__init__()
 		self.num_fourier_features = num_fourier_features
 
-		fourier_expanded_dim = input_dim + (input_dim * num_fourier_features)
+		fourier_expanded_dim = input_dim * num_fourier_features if num_fourier_features > 0 else input_dim
 		dim_list = [fourier_expanded_dim] + list(hidden_dims) + [input_dim]
 		layers = []
 		for i in range(len(dim_list) - 1):
@@ -17,7 +17,7 @@ class ODEFunc(nn.Module):
 		self.layers = nn.ModuleList(layers)
 
 	def compute_positional_fourier_features(self, x):
-		encodings = [x]
+		encodings = []
 		for i in range(self.num_fourier_features // 2):
 			freq = 2.0 ** i
 			sin_features = torch.sin(freq * x)
@@ -46,9 +46,14 @@ class ODEFunc(nn.Module):
 	def forward(self, t, state):
 		h = state[0]
 		scene_context = state[1]
-		h_fourier = self.compute_positional_fourier_features(h)
+		h_fourier = self.compute_positional_fourier_features(h) if self.num_fourier_features > 0 else h
 		h_dot = self._h_dot(t, h_fourier, scene_context)
 		return h_dot, torch.zeros_like(scene_context).requires_grad_(True) if scene_context is not None else None
+	
+	def forward2(self, t, h, scene_context):
+		h_fourier = self.compute_positional_fourier_features(h) if self.num_fourier_features > 0 else h
+		h_dot = self._h_dot(t, h_fourier, scene_context)
+		return h_dot
 	
 class ODE(nn.Module):
 	def __init__(self, input_dim, condition_dim, hidden_dims, num_fourier_features):
@@ -91,4 +96,27 @@ class ODE(nn.Module):
 				hs[i].append(h[i])
 				
 		hs = tuple(torch.stack(h_list, dim=0) for h_list in hs)
+		return hs
+	
+	def solve_ivp3(self, initial_values, integration_times, scene_context, mask=None):
+		states = self.forward_euler2(initial_values, integration_times, scene_context)
+		return states
+	
+	def forward_euler2(self, initial_values, integration_times, scene_context):
+		hs = []
+		t0 = integration_times[0]
+		h = torch.cat(initial_values[int(t0 * 10)], dim=0).unsqueeze(0)
+		print(h.shape)
+			
+		for t0, t1 in zip(integration_times[:-1], integration_times[1:]):
+			dt = t1 - t0
+			dh = self.vector_field.forward2(t0, h, scene_context)
+			h = h + dt * dh
+			if initial_values[int(t1 * 10)]:
+				hx = torch.cat(initial_values[int(t1 * 10)], dim=0).unsqueeze(0)
+				print(h.shape)
+				print(hx.shape)
+				h = torch.cat([h, hx], dim=1)
+			hs.append(h)
+
 		return hs

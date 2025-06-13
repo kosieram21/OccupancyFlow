@@ -24,10 +24,14 @@ class OccupancyFlowNetwork(nn.Module):
 		flow = self.flow_field(t, h, scene_context, flow_field_mask)
 		return flow
 	
-	def warp_occupancy(self, occupancy, integration_times, scene_context, use_custom=False):
+	def warp_occupancy(self, occupancy, integration_times, scene_context, use_custom=True):
 		if use_custom:
 			estimated_occupancy, _ = self.flow_field.solve_ivp2(occupancy, integration_times, scene_context)
 		else:
 			estimated_occupancy, _ = self.flow_field.solve_ivp(occupancy, integration_times, scene_context)
 		estimated_occupancy = [estimated_occupancy[i] for i in range(estimated_occupancy.shape[0])]
+		return estimated_occupancy
+	
+	def warp_occupancy2(self, occupancy, integration_times, scene_context):
+		estimated_occupancy = self.flow_field.solve_ivp3(occupancy, integration_times, scene_context)
 		return estimated_occupancy
