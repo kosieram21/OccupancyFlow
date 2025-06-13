@@ -103,9 +103,9 @@ class ODE(nn.Module):
 		return states
 	
 	def forward_euler2(self, initial_values, integration_times, scene_context):
-		hs = []
 		t0 = integration_times[0]
 		h = torch.cat(initial_values[int(t0 * 10)], dim=0).unsqueeze(0)
+		hs = [h]
 		print(h.shape)
 			
 		for t0, t1 in zip(integration_times[:-1], integration_times[1:]):
