@@ -1,3 +1,4 @@
+import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -5,11 +6,16 @@ from torchdiffeq import odeint#_adjoint
 from model.layers.FiLM import FiLM
 	
 class ODEFunc(nn.Module):
-	def __init__(self, input_dim, condition_dim, hidden_dims, num_fourier_features):
+	def __init__(self, input_dim, condition_dim, hidden_dims, num_fourier_features, include_x=False):
 		super(ODEFunc, self).__init__()
 		self.num_fourier_features = num_fourier_features
+		self.include_x = include_x # TODO: delete me
 
-		fourier_expanded_dim = input_dim * num_fourier_features if num_fourier_features > 0 else input_dim
+		if self.include_x:
+			fourier_expanded_dim = input_dim + input_dim * num_fourier_features if num_fourier_features > 0 else input_dim
+		else:
+			fourier_expanded_dim = input_dim * num_fourier_features if num_fourier_features > 0 else input_dim
+		
 		dim_list = [fourier_expanded_dim] + list(hidden_dims) + [input_dim]
 		layers = []
 		for i in range(len(dim_list) - 1):
@@ -17,11 +23,14 @@ class ODEFunc(nn.Module):
 		self.layers = nn.ModuleList(layers)
 
 	def compute_positional_fourier_features(self, x):
-		encodings = []
+		if self.include_x:
+			encodings = [x]
+		else:
+			encodings = []
 		for i in range(self.num_fourier_features // 2):
 			freq = 2.0 ** i
-			sin_features = torch.sin(freq * x)
-			cos_features = torch.cos(freq * x)
+			sin_features = torch.sin(freq * math.pi * x)
+			cos_features = torch.cos(freq * math.pi * x)
 			encodings.append(sin_features)
 			encodings.append(cos_features)
 		return torch.cat(encodings, dim=-1)
@@ -56,10 +65,10 @@ class ODEFunc(nn.Module):
 		return h_dot
 	
 class ODE(nn.Module):
-	def __init__(self, input_dim, condition_dim, hidden_dims, num_fourier_features):
+	def __init__(self, input_dim, condition_dim, hidden_dims, num_fourier_features, include_x=False):
 		super(ODE, self).__init__()
 
-		self.vector_field = ODEFunc(input_dim, condition_dim, hidden_dims, num_fourier_features)
+		self.vector_field = ODEFunc(input_dim, condition_dim, hidden_dims, num_fourier_features, include_x)
 		
 	def forward(self, t, h, scene_context, mask=None):
 		# TODO: how should we use the mask here?
