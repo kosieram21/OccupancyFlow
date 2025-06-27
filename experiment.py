@@ -10,7 +10,7 @@ from torch.utils.data.distributed import DistributedSampler
 from dataclasses import dataclass
 from datasets import WaymoCached, waymo_cached_collate_fn
 from model import OccupancyFlowNetwork
-from train import train
+from train import pre_train
 from evaluate import evaluate
 from visualize import visualize
 
@@ -48,7 +48,8 @@ def build_model(config, device):
     ).to(device)
 
     if config.initialize_from_checkpoint:
-        model.load_state_dict(torch.load(f'checkpoints/occupancy_flow_checkpoint{config.epochs - 1}.pt'))
+        # TODO: configurable checkpoint root and id
+        model.load_state_dict(torch.load(f'checkpoints/pretrain/occupancy_flow_checkpoint{config.epochs - 1}.pt'))
         # TODO: delete the alternative model loading logic
         #checkpoint = 1
         #state_dict = torch.load(f'checkpoints/occupancy_flow_checkpoint{checkpoint}.pt')
@@ -95,9 +96,9 @@ def single_device_train(config):
     test_dataloader = prepare_dataset(config, is_train=False, distributed=False)
 
     if config.should_train:
-        train(dataloader=train_dataloader, model=model, device=device, 
-              epochs=config.epochs, lr=config.lr, weight_decay=config.weight_decay, gamma=config.gamma,
-              logging_enabled=config.logging_enabled, checkpointing_enabled=config.checkpointing_enabled)
+        pre_train(dataloader=train_dataloader, model=model, device=device, 
+                  epochs=config.epochs, lr=config.lr, weight_decay=config.weight_decay, gamma=config.gamma,
+                  logging_enabled=config.logging_enabled, checkpointing_enabled=config.checkpointing_enabled)
     
     if config.should_evaluate:
         epe = evaluate(dataloader=test_dataloader, model=model, device=device)
@@ -130,9 +131,9 @@ def distributed_train(rank, world_size, config, experiment_id):
         test_dataloader = prepare_dataset(config, is_train=False, distributed=True, rank=rank, world_size=world_size)
 
         if config.should_train:
-            train(dataloader=train_dataloader, model=model, device=rank, 
-                  epochs=config.epochs, lr=config.lr, weight_decay=config.weight_decay, gamma=config.gamma,
-                  logging_enabled=config.logging_enabled, checkpointing_enabled=config.checkpointing_enabled)
+            pre_train(dataloader=train_dataloader, model=model, device=rank, 
+                      epochs=config.epochs, lr=config.lr, weight_decay=config.weight_decay, gamma=config.gamma,
+                      logging_enabled=config.logging_enabled, checkpointing_enabled=config.checkpointing_enabled)
     
         if config.should_evaluate:
             epe = evaluate(dataloader=test_dataloader, model=model, device=rank)

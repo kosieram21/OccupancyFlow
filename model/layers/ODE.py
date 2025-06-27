@@ -2,7 +2,6 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchdiffeq import odeint#_adjoint
 from model.layers.FiLM import FiLM
 	
 class ODEFunc(nn.Module):
@@ -52,14 +51,7 @@ class ODEFunc(nn.Module):
 
 		return h_dot
 	
-	def forward(self, t, state):
-		h = state[0]
-		scene_context = state[1]
-		h_fourier = self.compute_positional_fourier_features(h) if self.num_fourier_features > 0 else h
-		h_dot = self._h_dot(t, h_fourier, scene_context)
-		return h_dot, torch.zeros_like(scene_context).requires_grad_(True) if scene_context is not None else None
-	
-	def forward2(self, t, h, scene_context):
+	def forward(self, t, h, scene_context):
 		h_fourier = self.compute_positional_fourier_features(h) if self.num_fourier_features > 0 else h
 		h_dot = self._h_dot(t, h_fourier, scene_context)
 		return h_dot
@@ -70,55 +62,22 @@ class ODE(nn.Module):
 
 		self.vector_field = ODEFunc(input_dim, condition_dim, hidden_dims, num_fourier_features, include_x)
 		
-	def forward(self, t, h, scene_context, mask=None):
-		# TODO: how should we use the mask here?
-		state = (h, scene_context)
-		flow, _ = self.vector_field(t, state)
+	def forward(self, t, h, scene_context):
+		flow = self.vector_field(t, h, scene_context)
 		return flow
 	
-	def solve_ivp(self, initial_value, integration_times, scene_context, mask=None):
-		state = (initial_value, scene_context)
-		#states = odeint_adjoint(self.vector_field, state, integration_times, method='euler')
-		states = odeint(self.vector_field, state, integration_times, method='euler')
+	def solve_ivp(self, initial_values, integration_times, scene_context):
+		states = self.forward_euler(initial_values, integration_times, scene_context)
 		return states
 	
-	def solve_ivp2(self, initial_value, integration_times, scene_context, mask=None):
-		state = (initial_value, scene_context)
-		states = self.forward_euler(state, integration_times)
-		return states
-	
-	def forward_euler(self, h0, integration_times):
-		num_components = len(h0)
-		hs = tuple([] for _ in range(num_components))
-		h = h0
-		
-		for i in range(num_components):
-			hs[i].append(h[i])
-			
-		for t0, t1 in zip(integration_times[:-1], integration_times[1:]):
-			dt = t1 - t0
-			dh = self.vector_field(t0, h)
-
-			h = tuple(h_i + dt * dh_i for h_i, dh_i in zip(h, dh))
-			
-			for i in range(num_components):
-				hs[i].append(h[i])
-				
-		hs = tuple(torch.stack(h_list, dim=0) for h_list in hs)
-		return hs
-	
-	def solve_ivp3(self, initial_values, integration_times, scene_context, mask=None):
-		states = self.forward_euler2(initial_values, integration_times, scene_context)
-		return states
-	
-	def forward_euler2(self, initial_values, integration_times, scene_context):
+	def forward_euler(self, initial_values, integration_times, scene_context):
 		t0 = integration_times[0]
 		h = torch.cat(initial_values[int(t0 * 10)], dim=0).unsqueeze(0)
 		hs = [h]
 			
 		for t0, t1 in zip(integration_times[:-1], integration_times[1:]):
 			dt = t1 - t0
-			dh = self.vector_field.forward2(t0, h, scene_context)
+			dh = self.vector_field(t0, h, scene_context)
 			h = h + dt * dh
 
 			if initial_values[int(t1 * 10)]:
