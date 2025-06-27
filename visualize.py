@@ -204,6 +204,7 @@ def visualize(dataloader, model, device,
             sample_flow_field_velocities = flow_field_velocities[i].unsqueeze(0).to(device)
 
             # TODO: this does not work with ddp... need to extract underlying model
+            # TODO: need to update visualization code to work with new ivp solver
             scene_context = model.scene_encoder(sample_road_map, sample_agent_trajectories)
 
             root = f'visualization/sample{samples_processed}'

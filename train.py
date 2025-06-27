@@ -134,10 +134,68 @@ def scene_occupancy_alignment(model, agent_ids, positions, times, scene_context,
                 
     return loss / count
 
+def pre_train(dataloader, model, device,
+              epochs, lr, weight_decay, gamma, 
+              logging_enabled=False, checkpointing_enabled=False):
+    model.train()
+
+    optim = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    scheduler = torch.optim.lr_scheduler.ExponentialLR(optim, gamma=gamma)
+
+    if logging_enabled:
+        wandb.define_metric("pre-train batch loss", step_metric="pre-train batch")
+        wandb.define_metric("pre-train epoch loss", step_metric="pre-train epoch")
+        wandb.define_metric("pre-train batch", hidden=True)
+        wandb.define_metric("pre-train epoch", hidden=True)
+
+    total_batches = 0
+    for epoch in range(epochs):
+        epoch_loss = torch.tensor(0.0, device=device)
+        num_batches = 0
+
+        for batch in dataloader:
+            road_map, agent_trajectories, \
+            flow_field_agent_ids, flow_field_positions, flow_field_times, flow_field_velocities, \
+            agent_mask, flow_field_mask = move_batch_to_device(batch, device)
+
+            loss = flow_matching(model, 
+                                 flow_field_times, flow_field_positions, flow_field_velocities, 
+                                 road_map, agent_trajectories, 
+                                 agent_mask, flow_field_mask)
+            
+            total_loss = aggregate_loss(loss.detach())
+
+            if logging_enabled:
+                wandb.log({"pre-train batch loss": total_loss, "pre-train batch": total_batches})
+                print(f'Batch {total_batches+1} (pre-train), Loss: {total_loss:.6f}')
+
+            optim.zero_grad()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            optim.step()
+
+            epoch_loss += total_loss
+            num_batches += 1
+            total_batches += 1
+
+        scheduler.step()
+
+        avg_loss = epoch_loss / num_batches
+        
+        if logging_enabled:
+            wandb.log({"pre-train epoch loss": avg_loss, "pre-train epoch": epoch})
+            print(f'Epoch {epoch+1}/{epochs} (pre-train), Loss: {avg_loss:.6f}, LR: {scheduler.get_last_lr()[0]:.6f}')
+
+        if checkpointing_enabled:
+            save_checkpoint(model, f'checkpoints/pretrain', f'occupancy_flow_checkpoint{epoch}')
+
 def fine_tune(dataloader, model, device,
               epochs, lr, weight_decay, gamma,
               logging_enabled=False, checkpointing_enabled=False):
     model.train()
+
+    for param in model.scene_encoder.parameters():
+        param.requires_grad = False
 
     optim = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optim, gamma=gamma)
@@ -152,7 +210,6 @@ def fine_tune(dataloader, model, device,
         wandb.define_metric("fine-tune batch", hidden=True)
         wandb.define_metric("fine-tune epoch", hidden=True)
 
-    # update for fine tuning
     total_batches = 0
     for epoch in range(epochs):
         epoch_loss = torch.tensor(0.0, device=device)
@@ -199,9 +256,9 @@ def fine_tune(dataloader, model, device,
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optim.step()
 
-            epoch_loss += total_loss.detach()
-            epoch_flow_loss += total_flow_loss.detach()
-            epoch_occupancy_loss += total_occupancy_loss.detach()
+            epoch_loss += total_loss
+            epoch_flow_loss += total_flow_loss
+            epoch_occupancy_loss += total_occupancy_loss
             num_batches += 1
             total_batches += 1
 
@@ -222,59 +279,3 @@ def fine_tune(dataloader, model, device,
 
         if checkpointing_enabled:
             save_checkpoint(model, f'checkpoints/finetune', f'occupancy_flow_checkpoint{epoch}')
-
-def pre_train(dataloader, model, device,
-              epochs, lr, weight_decay, gamma, 
-              logging_enabled=False, checkpointing_enabled=False):
-    model.train()
-
-    optim = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
-    scheduler = torch.optim.lr_scheduler.ExponentialLR(optim, gamma=gamma)
-
-    if logging_enabled:
-        wandb.define_metric("pre-train batch loss", step_metric="pre-train batch")
-        wandb.define_metric("pre-train epoch loss", step_metric="pre-train epoch")
-        wandb.define_metric("pre-train batch", hidden=True)
-        wandb.define_metric("pre-train epoch", hidden=True)
-
-    total_batches = 0
-    for epoch in range(epochs):
-        epoch_loss = torch.tensor(0.0, device=device)
-        num_batches = 0
-
-        for batch in dataloader:
-            road_map, agent_trajectories, \
-            flow_field_agent_ids, flow_field_positions, flow_field_times, flow_field_velocities, \
-            agent_mask, flow_field_mask = move_batch_to_device(batch, device)
-
-            loss = flow_matching(model, 
-                                 flow_field_times, flow_field_positions, flow_field_velocities, 
-                                 road_map, agent_trajectories, 
-                                 agent_mask, flow_field_mask)
-            
-            total_loss = aggregate_loss(loss.detach())
-
-            if logging_enabled:
-                wandb.log({"pre-train batch loss": total_loss, "pre-train batch": total_batches})
-                print(f'Batch {total_batches+1} (pre-train), Loss: {total_loss:.6f}')
-
-            optim.zero_grad()
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            optim.step()
-
-            epoch_loss += loss.detach()
-            num_batches += 1
-            total_batches += 1
-
-        scheduler.step()
-
-        avg_loss = epoch_loss / num_batches
-        total_avg_loss = aggregate_loss(avg_loss)
-        
-        if logging_enabled:
-            wandb.log({"pre-train epoch loss": total_avg_loss, "pre-train epoch": epoch})
-            print(f'Epoch {epoch+1}/{epochs} (pre-train), Loss: {total_avg_loss:.6f}, LR: {scheduler.get_last_lr()[0]:.6f}')
-
-        if checkpointing_enabled:
-            save_checkpoint(model, f'checkpoints/pretrain', f'occupancy_flow_checkpoint{epoch}')

@@ -20,16 +20,21 @@ class ExperimentConfig:
     logging_enabled: bool
     checkpointing_enabled: bool
     initialize_from_checkpoint: bool
-    should_train: bool
+    should_pre_train: bool
+    should_fine_tune: bool
     should_evaluate: bool
     should_visualize: bool
     train_path: str
     test_path: str
-    batch_size: int
-    epochs: int
-    lr: float
-    weight_decay: float
-    gamma: float
+    pre_train_batch_size: int
+    pre_train_epochs: int
+    pre_train_lr: float
+    pre_train_weight_decay: float
+    pre_train_gamma: float
+    fine_tune_epochs: int
+    fine_tune_lr: float
+    fine_tune_weight_decay: float
+    fine_tune_gamma: float
     road_map_image_size: int 
     road_map_window_size: int 
     trajectory_feature_dim: int
@@ -49,7 +54,7 @@ def build_model(config, device):
 
     if config.initialize_from_checkpoint:
         # TODO: configurable checkpoint root and id
-        model.load_state_dict(torch.load(f'checkpoints/pretrain/occupancy_flow_checkpoint{config.epochs - 1}.pt'))
+        model.load_state_dict(torch.load(f'checkpoints/pretrain/occupancy_flow_checkpoint{config.pre_train_epochs - 1}.pt'))
         # TODO: delete the alternative model loading logic
         #checkpoint = 1
         #state_dict = torch.load(f'checkpoints/occupancy_flow_checkpoint{checkpoint}.pt')
@@ -69,10 +74,10 @@ def prepare_dataset(config, is_train=True, distributed=False, rank=0, world_size
 
     dataloader = DataLoader(
         dataset,
-        batch_size=config.batch_size,
+        batch_size=config.pre_train_batch_size,
         sampler=sampler,
         shuffle=(sampler is None and is_train),
-        num_workers=min(config.batch_size, torch.get_num_threads()),
+        num_workers=min(config.pre_train_batch_size, torch.get_num_threads()),
         collate_fn=waymo_cached_collate_fn,
         pin_memory=True
     )
@@ -95,9 +100,9 @@ def single_device_train(config):
     train_dataloader = prepare_dataset(config, is_train=True, distributed=False)
     test_dataloader = prepare_dataset(config, is_train=False, distributed=False)
 
-    if config.should_train:
+    if config.should_pre_train:
         pre_train(dataloader=train_dataloader, model=model, device=device, 
-                  epochs=config.epochs, lr=config.lr, weight_decay=config.weight_decay, gamma=config.gamma,
+                  epochs=config.pre_train_epochs, lr=config.pre_train_lr, weight_decay=config.pre_train_weight_decay, gamma=config.pre_train_gamma,
                   logging_enabled=config.logging_enabled, checkpointing_enabled=config.checkpointing_enabled)
     
     if config.should_evaluate:
@@ -130,9 +135,9 @@ def distributed_train(rank, world_size, config, experiment_id):
         train_dataloader = prepare_dataset(config, is_train=True, distributed=True, rank=rank, world_size=world_size)
         test_dataloader = prepare_dataset(config, is_train=False, distributed=True, rank=rank, world_size=world_size)
 
-        if config.should_train:
+        if config.should_pre_train:
             pre_train(dataloader=train_dataloader, model=model, device=rank, 
-                      epochs=config.epochs, lr=config.lr, weight_decay=config.weight_decay, gamma=config.gamma,
+                      epochs=config.pre_train_epochs, lr=config.pre_train_lr, weight_decay=config.pre_train_weight_decay, gamma=config.pre_train_gamma,
                       logging_enabled=config.logging_enabled, checkpointing_enabled=config.checkpointing_enabled)
     
         if config.should_evaluate:
@@ -164,16 +169,21 @@ if __name__ == '__main__':
         logging_enabled=True,
         checkpointing_enabled=True,
         initialize_from_checkpoint=True,#False,
-        should_train=False,#True,
+        should_pre_train=False,#True,
+        should_fine_tune=True,
         should_evaluate=True,
         should_visualize=False,
-        train_path='../data1/waymo_dataset/v1.1/tensor_cache/training',
+        pre_train_path='../data1/waymo_dataset/v1.1/tensor_cache/training',
         test_path='../data1/waymo_dataset/v1.1/tensor_cache/validation',
-        batch_size=16,
-        epochs=100,
-        lr=1e-4,
-        weight_decay=0,
-        gamma=0.999,
+        pre_train_batch_size=16,
+        pre_train_epochs=100,
+        pre_train_lr=1e-4,
+        pre_train_weight_decay=0,
+        pre_train_gamma=0.999,
+        fine_tune_epochs=100,
+        fine_tune_lr=1e-5,
+        fine_tune_weight_decay=0,
+        fine_tune_gamma=0.999,
         road_map_image_size=256,
         road_map_window_size=8,
         trajectory_feature_dim=10,
