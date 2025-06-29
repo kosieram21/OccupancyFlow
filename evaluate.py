@@ -37,7 +37,7 @@ def evaluate(dataloader, model, device):
             agent_mask = agent_mask.to(device)
             flow_field_mask = flow_field_mask.to(device)
 
-            flow = model(flow_field_times, flow_field_positions, road_map, agent_trajectories, agent_mask)
+            flow, _ = model(flow_field_times, flow_field_positions, road_map, agent_trajectories, agent_mask)
             
             flow_field_mask = flow_field_mask.view(-1)
             flow = flow.view(-1, 2)[flow_field_mask == 1]

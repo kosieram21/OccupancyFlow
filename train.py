@@ -91,34 +91,34 @@ def reconstruct_trajectories(estimated_occupancy, present, agent_offsets, integr
     return reconstructed_trajectories
 
 def flow_matching(model, times, positions, velocities, road_map, agent_trajectories, agent_mask, flow_field_mask):
-    scene_context = model.scene_encoder(road_map, agent_trajectories, agent_mask)
-    return flow_matching(model, times, positions, velocities, scene_context, flow_field_mask)
-
-def flow_matching(model, times, positions, velocities, scene_context, flow_field_mask):
-    flow = model.flow_field(times, positions, scene_context)            
+    flow, scene_context = model(times, positions, road_map, agent_trajectories, agent_mask)
     flow_field_mask = flow_field_mask.view(-1)
     flow = flow.view(-1, 2)[flow_field_mask == 1]
     velocities = velocities.view(-1, 2)[flow_field_mask == 1]
     loss = F.mse_loss(flow, velocities)
-    return loss
+    return loss, scene_context
 
-def occupancy_alignment(model, agent_ids, positions, times, scene_context, forecast_horizon=91):
+def occupancy_alignment(flow_field, agent_ids, positions, times, scene_context, flow_field_mask, forecast_horizon=91):
     loss = 0
     count = 0
 
     num_scenes = agent_ids.shape[0]
     for scene_index in range(num_scenes):
-        loss += scene_occupancy_alignment(model, 
-                                          agent_ids[scene_index], positions[scene_index], times[scene_index], 
-                                          scene_context[scene_index].unsqueeze(0), forecast_horizon)
+        scene_mask = flow_field_mask[scene_index]
+        ids = agent_ids[scene_index][scene_mask]
+        p = positions[scene_index][scene_mask]
+        t = times[scene_index][scene_mask]
+        context = scene_context[scene_index].unsqueeze(0)
+
+        loss += scene_occupancy_alignment(flow_field, ids, p, t, context, forecast_horizon)
         count += 1
     
     return loss / count
     
 
-def scene_occupancy_alignment(model, agent_ids, positions, times, scene_context, forecast_horizon=91):
+def scene_occupancy_alignment(flow_field, agent_ids, positions, times, scene_context, forecast_horizon=91):
     trajectories, present, initial_values, agent_offsets, integration_times, ids = construct_agent_trajectories(agent_ids, positions, times, forecast_horizon)
-    estimated_occupancy = model.flow_field.solve_ivp(initial_values, integration_times, scene_context)
+    estimated_occupancy = flow_field.solve_ivp(initial_values, integration_times, scene_context)
     estimated_trajectories = reconstruct_trajectories(estimated_occupancy, present, agent_offsets, integration_times, ids, forecast_horizon)
     
     loss = 0
@@ -129,8 +129,9 @@ def scene_occupancy_alignment(model, agent_ids, positions, times, scene_context,
             if present[time_index][id]:
                 ground_truth_positions = trajectories[time_index][id]
                 estimated_positions = estimated_trajectories[time_index][id]
-                loss += torch.mean(torch.abs(ground_truth_positions - estimated_positions))
-                count += 1
+                if ground_truth_positions.shape == estimated_positions.shape:
+                    loss += torch.mean(torch.abs(ground_truth_positions - estimated_positions))
+                    count += 1
                 
     return loss / count
 
@@ -158,10 +159,10 @@ def pre_train(dataloader, model, device,
             flow_field_agent_ids, flow_field_positions, flow_field_times, flow_field_velocities, \
             agent_mask, flow_field_mask = move_batch_to_device(batch, device)
 
-            loss = flow_matching(model, 
-                                 flow_field_times, flow_field_positions, flow_field_velocities, 
-                                 road_map, agent_trajectories, 
-                                 agent_mask, flow_field_mask)
+            loss, _ = flow_matching(model, 
+                                    flow_field_times, flow_field_positions, flow_field_velocities, 
+                                    road_map, agent_trajectories, 
+                                    agent_mask, flow_field_mask)
             
             total_loss = aggregate_loss(loss.detach())
 
@@ -194,7 +195,10 @@ def fine_tune(dataloader, model, device,
               logging_enabled=False, checkpointing_enabled=False):
     model.train()
 
-    for param in model.scene_encoder.parameters():
+    scene_encoder = model.module.scene_encoder if dist.is_initialized() else model.scene_encoder
+    flow_field = model.module.flow_field if dist.is_initialized() else model.flow_field
+
+    for param in scene_encoder.parameters():
         param.requires_grad = False
 
     optim = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
@@ -223,16 +227,17 @@ def fine_tune(dataloader, model, device,
             agent_mask, flow_field_mask = move_batch_to_device(batch, device)
 
             with torch.no_grad():
-                scene_context = model.scene_encoder(road_map, agent_trajectories, agent_mask)
+                scene_context = scene_encoder(road_map, agent_trajectories, agent_mask)
             
-            flow_loss = flow_matching(model, 
-                                      flow_field_times, flow_field_positions, flow_field_velocities,
-                                      scene_context, 
-                                      flow_field_mask)
+            flow_loss, scene_context = flow_matching(model, 
+                                                     flow_field_times, flow_field_positions, flow_field_velocities,
+                                                     road_map, agent_trajectories, 
+                                                     agent_mask, flow_field_mask)
 
-            occupancy_loss = occupancy_alignment(model, 
+            occupancy_loss = occupancy_alignment(flow_field, 
                                                  flow_field_agent_ids, flow_field_positions, flow_field_times,
                                                  scene_context,
+                                                 flow_field_mask,
                                                  forecast_horizon=91)
             
             loss = flow_loss + occupancy_loss

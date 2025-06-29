@@ -10,7 +10,7 @@ from torch.utils.data.distributed import DistributedSampler
 from dataclasses import dataclass
 from datasets import WaymoCached, waymo_cached_collate_fn
 from model import OccupancyFlowNetwork
-from train import pre_train
+from train import pre_train, fine_tune
 from evaluate import evaluate
 from visualize import visualize
 
@@ -24,17 +24,20 @@ class ExperimentConfig:
     should_fine_tune: bool
     should_evaluate: bool
     should_visualize: bool
-    train_path: str
+    pre_train_path: str
+    fine_tune_path: str
     test_path: str
     pre_train_batch_size: int
     pre_train_epochs: int
     pre_train_lr: float
     pre_train_weight_decay: float
     pre_train_gamma: float
+    fine_tune_batch_size: int
     fine_tune_epochs: int
     fine_tune_lr: float
     fine_tune_weight_decay: float
     fine_tune_gamma: float
+    test_batch_size: int
     road_map_image_size: int 
     road_map_window_size: int 
     trajectory_feature_dim: int
@@ -54,7 +57,8 @@ def build_model(config, device):
 
     if config.initialize_from_checkpoint:
         # TODO: configurable checkpoint root and id
-        model.load_state_dict(torch.load(f'checkpoints/pretrain/occupancy_flow_checkpoint{config.pre_train_epochs - 1}.pt'))
+        #model.load_state_dict(torch.load(f'checkpoints/pretrain/occupancy_flow_checkpoint{config.pre_train_epochs - 1}.pt'))
+        model.load_state_dict(torch.load(f'checkpoints/pretrain/occupancy_flow_checkpoint99.pt'))
         # TODO: delete the alternative model loading logic
         #checkpoint = 1
         #state_dict = torch.load(f'checkpoints/occupancy_flow_checkpoint{checkpoint}.pt')
@@ -63,8 +67,7 @@ def build_model(config, device):
 
     return model
 
-def prepare_dataset(config, is_train=True, distributed=False, rank=0, world_size=1):
-    path = config.train_path if is_train else config.test_path
+def prepare_dataset(path, batch_size, is_train=True, distributed=False, rank=0, world_size=1):
     dataset = WaymoCached(path)
 
     if distributed:
@@ -74,10 +77,10 @@ def prepare_dataset(config, is_train=True, distributed=False, rank=0, world_size
 
     dataloader = DataLoader(
         dataset,
-        batch_size=config.pre_train_batch_size,
+        batch_size=batch_size,
         sampler=sampler,
         shuffle=(sampler is None and is_train),
-        num_workers=min(config.pre_train_batch_size, torch.get_num_threads()),
+        num_workers=min(batch_size, torch.get_num_threads()),
         collate_fn=waymo_cached_collate_fn,
         pin_memory=True
     )
@@ -97,15 +100,20 @@ def single_device_train(config):
     
     model = build_model(config, device)
 
-    train_dataloader = prepare_dataset(config, is_train=True, distributed=False)
-    test_dataloader = prepare_dataset(config, is_train=False, distributed=False)
-
     if config.should_pre_train:
-        pre_train(dataloader=train_dataloader, model=model, device=device, 
+        pre_train_dataloader = prepare_dataset(config.pre_train_path, config.pre_train_batch_size, is_train=True, distributed=False)
+        pre_train(dataloader=pre_train_dataloader, model=model, device=device, 
                   epochs=config.pre_train_epochs, lr=config.pre_train_lr, weight_decay=config.pre_train_weight_decay, gamma=config.pre_train_gamma,
                   logging_enabled=config.logging_enabled, checkpointing_enabled=config.checkpointing_enabled)
     
+    if config.should_fine_tune:
+        fine_tune_dataloader = prepare_dataset(config.fine_tune_path, config.fine_tune_batch_size, is_train=True, distributed=False)
+        fine_tune(dataloader=fine_tune_dataloader, model=model, device=device, 
+                  epochs=config.fine_tune_epochs, lr=config.fine_tune_lr, weight_decay=config.fine_tune_weight_decay, gamma=config.fine_tune_gamma,
+                  logging_enabled=config.logging_enabled, checkpointing_enabled=config.checkpointing_enabled)
+
     if config.should_evaluate:
+        test_dataloader = prepare_dataset(config.test_path, config.test_batch_size, is_train=False, distributed=False)
         epe = evaluate(dataloader=test_dataloader, model=model, device=device)
 
         if config.logging_enabled:
@@ -132,15 +140,20 @@ def distributed_train(rank, world_size, config, experiment_id):
         model = build_model(config, rank)
         model = nn.parallel.DistributedDataParallel(model, device_ids=[rank], find_unused_parameters=True)
 
-        train_dataloader = prepare_dataset(config, is_train=True, distributed=True, rank=rank, world_size=world_size)
-        test_dataloader = prepare_dataset(config, is_train=False, distributed=True, rank=rank, world_size=world_size)
-
         if config.should_pre_train:
-            pre_train(dataloader=train_dataloader, model=model, device=rank, 
+            pre_train_dataloader = prepare_dataset(config.pre_train_path, config.pre_train_batch_size, is_train=True, distributed=True, rank=rank, world_size=world_size)
+            pre_train(dataloader=pre_train_dataloader, model=model, device=rank, 
                       epochs=config.pre_train_epochs, lr=config.pre_train_lr, weight_decay=config.pre_train_weight_decay, gamma=config.pre_train_gamma,
                       logging_enabled=config.logging_enabled, checkpointing_enabled=config.checkpointing_enabled)
     
+        if config.should_fine_tune:
+            fine_tune_dataloader = prepare_dataset(config.fine_tune_path, config.fine_tune_batch_size, is_train=True, distributed=False, rank=rank, world_size=world_size)
+            fine_tune(dataloader=fine_tune_dataloader, model=model, device=rank, 
+                      epochs=config.fine_tune_epochs, lr=config.fine_tune_lr, weight_decay=config.fine_tune_weight_decay, gamma=config.fine_tune_gamma,
+                      logging_enabled=config.logging_enabled, checkpointing_enabled=config.checkpointing_enabled)
+
         if config.should_evaluate:
+            test_dataloader = prepare_dataset(config.test_path, config.test_batch_size, is_train=False, distributed=True, rank=rank, world_size=world_size)
             epe = evaluate(dataloader=test_dataloader, model=model, device=rank)
 
             if config.logging_enabled and rank==0:
@@ -168,22 +181,25 @@ if __name__ == '__main__':
         data_parallel=True,
         logging_enabled=True,
         checkpointing_enabled=True,
-        initialize_from_checkpoint=True,#False,
+        initialize_from_checkpoint=True,
         should_pre_train=False,#True,
         should_fine_tune=True,
         should_evaluate=True,
         should_visualize=False,
         pre_train_path='../data1/waymo_dataset/v1.1/tensor_cache/training',
+        fine_tune_path='../data1/waymo_dataset/v1.1/tensor_cache/training',
         test_path='../data1/waymo_dataset/v1.1/tensor_cache/validation',
         pre_train_batch_size=16,
         pre_train_epochs=100,
         pre_train_lr=1e-4,
         pre_train_weight_decay=0,
         pre_train_gamma=0.999,
+        fine_tune_batch_size=1,
         fine_tune_epochs=100,
         fine_tune_lr=1e-5,
         fine_tune_weight_decay=0,
         fine_tune_gamma=0.999,
+        test_batch_size=16,
         road_map_image_size=256,
         road_map_window_size=8,
         trajectory_feature_dim=10,
