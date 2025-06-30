@@ -20,7 +20,7 @@ class CrossAttentionLayer(nn.Module):
         
     def forward(self, query, key, mask=None):
         norm_query = self.norm_query(query)
-        norm_query = norm_query * mask.unsqueeze(-1) if mask is not None else norm_query # TODO: double check this is correct
+        norm_query = norm_query * mask.unsqueeze(-1) if mask is not None else norm_query
         attn_output, _ = self.cross_attention(
             query=norm_query,
             key=key,

@@ -70,8 +70,10 @@ def build_model(config, device):
 def prepare_dataset(path, batch_size, is_train=True, distributed=False, rank=0, world_size=1):
     dataset = WaymoCached(path)
 
+    shuffle=is_train
+
     if distributed:
-        sampler = DistributedSampler(dataset, num_replicas=world_size, rank=rank, shuffle=is_train, drop_last=is_train)
+        sampler = DistributedSampler(dataset, num_replicas=world_size, rank=rank, shuffle=shuffle, drop_last=is_train)
     else:
         sampler = None
 
@@ -79,7 +81,7 @@ def prepare_dataset(path, batch_size, is_train=True, distributed=False, rank=0, 
         dataset,
         batch_size=batch_size,
         sampler=sampler,
-        shuffle=(sampler is None and is_train),
+        shuffle=(sampler is None and shuffle),
         num_workers=min(batch_size, torch.get_num_threads()),
         collate_fn=waymo_cached_collate_fn,
         pin_memory=True
@@ -159,6 +161,7 @@ def distributed_train(rank, world_size, config, experiment_id):
             if config.logging_enabled and rank==0:
                 wandb.log({'epe': epe})
                 print(f'end point error: {epe}')
+            print(f'end point error: {epe}')
 
         if config.should_visualize:
             visualize(dataloader=test_dataloader, model=model, device=rank, 
@@ -179,17 +182,17 @@ def multi_device_train(config):
 if __name__ == '__main__':
     config = ExperimentConfig(
         data_parallel=True,
-        logging_enabled=True,
-        checkpointing_enabled=True,
+        logging_enabled=False,
+        checkpointing_enabled=False,
         initialize_from_checkpoint=True,
-        should_pre_train=False,#True,
-        should_fine_tune=True,
+        should_pre_train=False,
+        should_fine_tune=False,
         should_evaluate=True,
         should_visualize=False,
         pre_train_path='../data1/waymo_dataset/v1.1/tensor_cache/training',
         fine_tune_path='../data1/waymo_dataset/v1.1/tensor_cache/training',
         test_path='../data1/waymo_dataset/v1.1/tensor_cache/validation',
-        pre_train_batch_size=16,
+        pre_train_batch_size=1,
         pre_train_epochs=100,
         pre_train_lr=1e-4,
         pre_train_weight_decay=0,

@@ -92,6 +92,7 @@ def reconstruct_trajectories(estimated_occupancy, present, agent_offsets, integr
 
 def flow_matching(model, times, positions, velocities, road_map, agent_trajectories, agent_mask, flow_field_mask):
     flow, scene_context = model(times, positions, road_map, agent_trajectories, agent_mask)
+    #TODO: this means over (agent * batch) we need to mean over agent and then over batch
     flow_field_mask = flow_field_mask.view(-1)
     flow = flow.view(-1, 2)[flow_field_mask == 1]
     velocities = velocities.view(-1, 2)[flow_field_mask == 1]

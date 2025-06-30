@@ -39,9 +39,12 @@ def evaluate(dataloader, model, device):
 
             flow, _ = model(flow_field_times, flow_field_positions, road_map, agent_trajectories, agent_mask)
             
-            flow_field_mask = flow_field_mask.view(-1)
-            flow = flow.view(-1, 2)[flow_field_mask == 1]
-            flow_field_velocities = flow_field_velocities.view(-1, 2)[flow_field_mask == 1]
+            #flow_field_mask = flow_field_mask.view(-1)
+            #flow = flow.view(-1, 2)[flow_field_mask == 1]
+            #flow_field_velocities = flow_field_velocities.view(-1, 2)[flow_field_mask == 1]
+
+            flow = flow[flow_field_mask]
+            flow_field_velocities = flow_field_velocities[flow_field_mask]
 
             world_velocities = get_image_velocity(flow_field_velocities.cpu().numpy())
             world_velocities = torch.from_numpy(world_velocities).to(device)
