@@ -9,7 +9,6 @@ def end_point_error(target_flow, estimated_flow, mask=None):
         l2_distance = l2_distance * mask
         sum_per_scene = l2_distance.sum(dim=-1)
         count_per_scene = mask.sum(dim=-1)
-        total_agents += count_per_scene.sum()
         scene_epe = sum_per_scene / count_per_scene
         total_epe = scene_epe.sum()
     else:
@@ -47,10 +46,6 @@ def evaluate(dataloader, model, device):
             flow_field_mask = flow_field_mask.to(device)
 
             flow, _ = model(flow_field_times, flow_field_positions, road_map, agent_trajectories, agent_mask)
-            flow_test, _ = model(flow_field_times[0][flow_field_mask[0]].unsqueeze(0),
-                                 flow_field_positions[0][flow_field_mask[0]].unsqueeze(0),
-                                 road_map[0].unsqueeze(0), agent_trajectories[0].unsqueeze(0),
-                                 agent_mask[0].unsqueeze(0))
 
             world_velocities = get_image_velocity(flow_field_velocities.cpu().numpy())
             world_velocities = torch.from_numpy(world_velocities).to(device)

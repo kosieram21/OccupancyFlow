@@ -181,7 +181,7 @@ def multi_device_train(config):
 
 if __name__ == '__main__':
     config = ExperimentConfig(
-        data_parallel=False,#True,
+        data_parallel=True,
         logging_enabled=False,
         checkpointing_enabled=False,
         initialize_from_checkpoint=True,
