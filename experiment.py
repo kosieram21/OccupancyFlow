@@ -181,7 +181,7 @@ def multi_device_train(config):
 
 if __name__ == '__main__':
     config = ExperimentConfig(
-        data_parallel=True,
+        data_parallel=False,#True,
         logging_enabled=False,
         checkpointing_enabled=False,
         initialize_from_checkpoint=True,
@@ -202,7 +202,7 @@ if __name__ == '__main__':
         fine_tune_lr=1e-5,
         fine_tune_weight_decay=0,
         fine_tune_gamma=0.999,
-        test_batch_size=16,
+        test_batch_size=1,
         road_map_image_size=256,
         road_map_window_size=8,
         trajectory_feature_dim=10,
