@@ -3,14 +3,10 @@ import torch.distributed as dist
 from datasets.Waymo import get_image_velocity
 
 def end_point_error(target_flow, estimated_flow, mask=None):
-    total_agents = 0
     scenes_in_batch = target_flow.shape[0]
     l2_distance = torch.norm(estimated_flow - target_flow, p=2, dim=-1)
     if mask is not None:
         l2_distance = l2_distance * mask
-        #print('l2 distance')
-        #print(l2_distance.shape)
-        #print(l2_distance[0])
         sum_per_scene = l2_distance.sum(dim=-1)
         count_per_scene = mask.sum(dim=-1)
         total_agents += count_per_scene.sum()
@@ -18,7 +14,7 @@ def end_point_error(target_flow, estimated_flow, mask=None):
         total_epe = scene_epe.sum()
     else:
         total_epe = l2_distance.sum()
-    return total_epe, scenes_in_batch, total_agents
+    return total_epe, scenes_in_batch
 
 # TODO: should this be moved to a shared location?
 def aggregate_epe(epe):
@@ -36,8 +32,6 @@ def evaluate(dataloader, model, device):
     with torch.no_grad():
         epe_sum = 0
         count = 0
-        batches = 0
-        agents = 0
 
         for batch in dataloader:
             road_map, agent_trajectories, \
@@ -64,31 +58,10 @@ def evaluate(dataloader, model, device):
             world_flow = get_image_velocity(flow.cpu().numpy())
             world_flow = torch.from_numpy(world_flow).to(device)
 
-            batch_epe, scenes_in_batch, batch_agents = end_point_error(world_velocities, world_flow, flow_field_mask)
+            batch_epe, scenes_in_batch = end_point_error(world_velocities, world_flow, flow_field_mask)
             epe_sum += batch_epe
             count += scenes_in_batch
-            batches += 1
-            agents += batch_agents
 
-            print('velocities')
-            print(flow_field_velocities[0].shape)
-            print(flow_field_velocities[0][flow_field_mask[0]].shape)
-            print(flow_field_velocities[0])
-
-            print(f'flow')
-            print(flow[0].shape)
-            print(flow[0][flow_field_mask[0]].shape)
-            print(flow[0])
-
-            print(f'flow test')
-            print(flow_test[0].shape)
-            print(flow_test[0])
-            break
-
-        # print(f'epe sum: {epe_sum}')
-        # print(f'total scenes: {count}')
-        # print(f'total batches: {batches}')
-        # print(f'total agents: {agents}')
         epe_score = epe_sum / count
         epe_score = aggregate_epe(epe_score)
 
