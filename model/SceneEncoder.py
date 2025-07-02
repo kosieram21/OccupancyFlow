@@ -46,6 +46,6 @@ class SceneEncoder(nn.Module):
         agent_tokens = agent_tokens + self.fusion_transformer(agent_tokens, environment_tokens, agent_mask)
         agent_tokens = self.interaction_transformer2(agent_tokens, agent_mask)
         agent_tokens = agent_tokens * agent_mask.unsqueeze(-1) if agent_mask is not None else agent_tokens
-        agents_per_scene = agent_mask.sum(dim=-1)
+        agents_per_scene = agent_mask.sum(dim=-1) if agent_mask is not None else agent_tokens.new_full((agent_tokens.shape[0],), agent_tokens.shape[1])
         embedding = agent_tokens.sum(dim=1) / agents_per_scene.unsqueeze(-1)
         return embedding

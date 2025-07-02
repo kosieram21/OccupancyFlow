@@ -90,14 +90,22 @@ def reconstruct_trajectories(estimated_occupancy, present, agent_offsets, integr
                 reconstructed_trajectories[time_index][id] = estimated_occupancy_at_time[start:end]
     return reconstructed_trajectories
 
-def flow_matching(model, times, positions, velocities, road_map, agent_trajectories, agent_mask, flow_field_mask):
+def flow_matching(model, times, positions, velocities, road_map, agent_trajectories, agent_mask=None, flow_field_mask=None):
+    scenes_in_batch = velocities.shape[0]
     flow, scene_context = model(times, positions, road_map, agent_trajectories, agent_mask)
-    #TODO: this means over (agent * batch) we need to mean over agent and then over batch
-    flow_field_mask = flow_field_mask.view(-1)
-    flow = flow.view(-1, 2)[flow_field_mask == 1]
-    velocities = velocities.view(-1, 2)[flow_field_mask == 1]
-    loss = F.mse_loss(flow, velocities)
-    return loss, scene_context
+    se = (flow - velocities)**2 
+    se = se.sum(dim=-1)
+    if flow_field_mask is not None:
+        se = se * flow_field_mask
+        total_se = se.sum(dim=-1)
+        agents_per_scene = flow_field_mask.sum(dim=-1)
+    else:
+        total_se = se.sum(dim=-1)
+        agents_per_scene = total_se.new_full((scenes_in_batch,), se.size(1))
+    scene_mse = total_se / agents_per_scene
+    total_mse = scene_mse.sum()
+    mse = total_mse / scenes_in_batch
+    return mse, scene_context
 
 def occupancy_alignment(flow_field, agent_ids, positions, times, scene_context, flow_field_mask, forecast_horizon=91):
     loss = 0

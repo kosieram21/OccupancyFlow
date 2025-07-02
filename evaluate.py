@@ -7,12 +7,13 @@ def end_point_error(target_flow, estimated_flow, mask=None):
     l2_distance = torch.norm(estimated_flow - target_flow, p=2, dim=-1)
     if mask is not None:
         l2_distance = l2_distance * mask
-        sum_per_scene = l2_distance.sum(dim=-1)
-        count_per_scene = mask.sum(dim=-1)
-        scene_epe = sum_per_scene / count_per_scene
-        total_epe = scene_epe.sum()
+        total_l2_distance = l2_distance.sum(dim=-1)
+        agents_per_scene = mask.sum(dim=-1)
     else:
-        total_epe = l2_distance.sum()
+        total_l2_distance = l2_distance.sum(dim=-1)
+        agents_per_scene = total_l2_distance.new_full((scenes_in_batch,), l2_distance.size(1))
+    scene_epe = total_l2_distance / agents_per_scene
+    total_epe = scene_epe.sum()
     return total_epe, scenes_in_batch
 
 # TODO: should this be moved to a shared location?
