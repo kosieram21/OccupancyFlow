@@ -530,8 +530,25 @@ def expand_to_bounding_box(positions, lengths, widths, values = None, step_size=
 
     return np.array(expanded)
 
-def collate_target_flow_field(data):
-    type_mask = data['state/type'] == 1 #TODO alloow for other road user types
+def collate_target_flow_fields(data):
+    vehicle_type_mask = data['state/type'] == 1
+    vehicle_agent_ids, vehicle_agent_positions, vehicle_agent_times, vehicle_agent_velocities = collate_target_flow_field(data, vehicle_type_mask)
+
+    pedestrian_type_mask = data['state/type'] == 2
+    pedestrian_agent_ids, pedestrian_agent_positions, pedestrian_agent_times, pedestrian_agent_velocities = collate_target_flow_field(data, pedestrian_type_mask)
+
+    cyclist_type_mask = data['state/type'] == 3
+    cyclist_agent_ids, cyclist_agent_positions, cyclist_agent_times, cyclist_agent_velocities = collate_target_flow_field(data, pedestrian_type_mask)
+
+    return vehicle_agent_ids, vehicle_agent_positions, vehicle_agent_times, vehicle_agent_velocities
+
+def collate_target_flow_field(data, type_mask):
+    if not type_mask.any():
+        agent_ids = torch.zeros((1, 1))
+        agent_positions = torch.zeros((1, 2))
+        agent_times = torch.zeros((1, 1))
+        agent_velocities = torch.zeros((1, 2))
+        return (agent_ids, agent_positions, agent_times, agent_velocities)
 
     past_positions = np.stack((data['state/past/x'], data['state/past/y']), axis=-1)
     current_position = np.stack((data['state/current/x'], data['state/current/y']), axis=-1)
@@ -611,7 +628,7 @@ def collate_target_flow_field(data):
         torch.FloatTensor(agent_ids), 
         torch.FloatTensor(agent_positions), 
         torch.FloatTensor(agent_times), 
-        torch.FloatTensor(agent_velocities)
+        torch.FloatTensor(agent_velocities),
     )
 
 def pad_tensors(tensors, max_size):
@@ -636,15 +653,32 @@ def pad_tensors(tensors, max_size):
 def waymo_collate_fn(batch):
     road_maps = []
     agent_trajectories = []
+
     flow_field_agent_ids = []
     flow_field_positions = []
     flow_field_times = []
     flow_field_velocities = []
 
+    vehicle_flow_field_agent_ids = []
+    vehicle_flow_field_positions = []
+    vehicle_flow_field_times = []
+    vehicle_flow_field_velocities = []
+
+    pedestrian_flow_field_agent_ids = []
+    pedestrian_flow_field_positions = []
+    pedestrian_flow_field_times = []
+    pedestrian_flow_field_velocities = []
+
+    cyclist_flow_field_agent_ids = []
+    cyclist_flow_field_positions = []
+    cyclist_flow_field_times = []
+    cyclist_flow_field_velocities = []
+
     for data in batch:
         road_maps.append(rasterize_road_map(data))
         agent_trajectories.append(collate_agent_trajectories(data))
-        ids, pos, t, vel = collate_target_flow_field(data)
+
+        ids, pos, t, vel = collate_target_flow_fields(data)
         flow_field_agent_ids.append(ids)
         flow_field_positions.append(pos)
         flow_field_times.append(t)
