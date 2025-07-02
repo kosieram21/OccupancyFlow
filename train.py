@@ -1,7 +1,6 @@
 import os
 import wandb
 import torch
-import torch.nn.functional as F
 import torch.distributed as dist
 from collections import defaultdict
 
