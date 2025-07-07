@@ -27,6 +27,7 @@ class ExperimentConfig:
     pre_train_path: str
     fine_tune_path: str
     test_path: str
+    visualization_path: str
     pre_train_batch_size: int
     pre_train_epochs: int
     pre_train_lr: float
@@ -38,6 +39,8 @@ class ExperimentConfig:
     fine_tune_weight_decay: float
     fine_tune_gamma: float
     test_batch_size: int
+    visualization_batch_size: int
+    visualization_samples: int
     road_map_image_size: int 
     road_map_window_size: int 
     trajectory_feature_dim: int
@@ -123,8 +126,9 @@ def single_device_train(config):
             print(f'end point error: {epe}')
 
     if config.should_visualize:
-        visualize(dataloader=test_dataloader, model=model, device=device, 
-                  num_samples=10)
+        visualization_dataloader = prepare_dataset(config.visualization_path, config.visualization_batch_size, is_train=False, distributed=False)
+        visualize(dataloader=visualization_dataloader, model=model, device=device, 
+                  num_samples=config.visualization_samples)
 
 def distributed_train(rank, world_size, config, experiment_id):
     dist.init_process_group(backend='nccl', rank=rank, world_size=world_size)
@@ -161,11 +165,11 @@ def distributed_train(rank, world_size, config, experiment_id):
             if config.logging_enabled and rank==0:
                 wandb.log({'epe': epe})
                 print(f'end point error: {epe}')
-            print(f'end point error: {epe}')
 
         if config.should_visualize:
-            visualize(dataloader=test_dataloader, model=model, device=rank, 
-                      num_samples=1)
+            visualization_dataloader = prepare_dataset(config.visualization_path, config.visualization_batch_size, is_train=False, distributed=True, rank=rank, world_size=world_size)
+            visualize(dataloader=visualization_dataloader, model=model, device=rank, 
+                      num_samples=config.visualization_samples)
     
     finally:
         dist.barrier()
@@ -181,18 +185,19 @@ def multi_device_train(config):
 
 if __name__ == '__main__':
     config = ExperimentConfig(
-        data_parallel=True,
-        logging_enabled=False,
-        checkpointing_enabled=False,
-        initialize_from_checkpoint=True,
-        should_pre_train=False,
+        data_parallel=False,#True,
+        logging_enabled=False,#True,
+        checkpointing_enabled=False,#True,
+        initialize_from_checkpoint=True,#False,
+        should_pre_train=False,#True,
         should_fine_tune=False,
-        should_evaluate=True,
-        should_visualize=False,
+        should_evaluate=False,#True,
+        should_visualize=True,#False,
         pre_train_path='../data1/waymo_dataset/v1.1/tensor_cache/training',
         fine_tune_path='../data1/waymo_dataset/v1.1/tensor_cache/training',
         test_path='../data1/waymo_dataset/v1.1/tensor_cache/validation',
-        pre_train_batch_size=1,
+        visualization_path='../data1/waymo_dataset/v1.1/tensor_cache/validation',
+        pre_train_batch_size=16,
         pre_train_epochs=100,
         pre_train_lr=1e-4,
         pre_train_weight_decay=0,
@@ -203,6 +208,8 @@ if __name__ == '__main__':
         fine_tune_weight_decay=0,
         fine_tune_gamma=0.999,
         test_batch_size=16,
+        visualization_batch_size=1,
+        visualization_samples=10,
         road_map_image_size=256,
         road_map_window_size=8,
         trajectory_feature_dim=10,

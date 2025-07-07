@@ -131,9 +131,11 @@ def render_occupancy_and_flow_unoccluded(model, road_map,
     sorted_keys = sorted(groups.keys())
     indices = groups[sorted_keys[initial_time]]
 
-    initial_occupancy = positions[0][indices].unsqueeze(0)
+    initial_occupancy = positions[0][indices]
     integration_times = torch.FloatTensor(sorted_keys[initial_time:]).to(road_map.device)
-    estimated_occupancy = model.warp_occupancy(initial_occupancy, integration_times, scene_context)
+    initial_value = [[] for _ in range(100)] # TODO: don't hardcode forecast horizon '100'
+    initial_value[initial_time].append(initial_occupancy)
+    estimated_occupancy = model.flow_field.solve_ivp(initial_value, integration_times, scene_context)
 
     factored_positions = []
     factored_times = []
