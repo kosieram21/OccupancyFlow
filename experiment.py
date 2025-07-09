@@ -153,7 +153,7 @@ def distributed_train(rank, world_size, config, experiment_id):
                       logging_enabled=config.logging_enabled, checkpointing_enabled=config.checkpointing_enabled)
     
         if config.should_fine_tune:
-            fine_tune_dataloader = prepare_dataset(config.fine_tune_path, config.fine_tune_batch_size, is_train=True, distributed=False, rank=rank, world_size=world_size)
+            fine_tune_dataloader = prepare_dataset(config.fine_tune_path, config.fine_tune_batch_size, is_train=True, distributed=True, rank=rank, world_size=world_size)
             fine_tune(dataloader=fine_tune_dataloader, model=model, device=rank, 
                       epochs=config.fine_tune_epochs, lr=config.fine_tune_lr, weight_decay=config.fine_tune_weight_decay, gamma=config.fine_tune_gamma,
                       logging_enabled=config.logging_enabled, checkpointing_enabled=config.checkpointing_enabled)
@@ -185,14 +185,14 @@ def multi_device_train(config):
 
 if __name__ == '__main__':
     config = ExperimentConfig(
-        data_parallel=False,#True,
-        logging_enabled=False,#True,
-        checkpointing_enabled=False,#True,
-        initialize_from_checkpoint=True,#False,
-        should_pre_train=False,#True,
-        should_fine_tune=False,
-        should_evaluate=False,#True,
-        should_visualize=True,#False,
+        data_parallel=True,
+        logging_enabled=True,
+        checkpointing_enabled=True,
+        initialize_from_checkpoint=True,
+        should_pre_train=False,
+        should_fine_tune=True,
+        should_evaluate=True,
+        should_visualize=False,
         pre_train_path='../data1/waymo_dataset/v1.1/tensor_cache/training',
         fine_tune_path='../data1/waymo_dataset/v1.1/tensor_cache/training',
         test_path='../data1/waymo_dataset/v1.1/tensor_cache/validation',
