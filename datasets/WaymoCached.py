@@ -30,12 +30,12 @@ class WaymoCached(Dataset):
 
 def cache_scene(path,
                 road_map, agent_trajectories, 
-                flow_field_agnet_ids, flow_field_positions, flow_field_times, flow_field_velocities, 
+                flow_field_agent_ids, flow_field_positions, flow_field_times, flow_field_velocities, 
                 agent_mask, flow_field_mask):
     scene = {
         'road_map': road_map,
         'agent_trajectories': agent_trajectories,
-        'flow_field_agnet_ids': flow_field_agnet_ids,
+        'flow_field_agnet_ids': flow_field_agent_ids,
         'flow_field_positions': flow_field_positions,
         'flow_field_times': flow_field_times,
         'flow_field_velocities': flow_field_velocities,

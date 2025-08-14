@@ -61,7 +61,8 @@ def build_model(config, device):
     if config.initialize_from_checkpoint:
         # TODO: configurable checkpoint root and id
         #model.load_state_dict(torch.load(f'checkpoints/pretrain/occupancy_flow_checkpoint{config.pre_train_epochs - 1}.pt'))
-        model.load_state_dict(torch.load(f'checkpoints/pretrain/occupancy_flow_checkpoint99.pt'))
+        model.load_state_dict(torch.load(f'checkpoints/finetune/occupancy_flow_checkpoint12.pt'))
+        #model.load_state_dict(torch.load(f'checkpoints/pretrain/occupancy_flow_checkpoint99.pt'))
         # TODO: delete the alternative model loading logic
         #checkpoint = 1
         #state_dict = torch.load(f'checkpoints/occupancy_flow_checkpoint{checkpoint}.pt')
@@ -92,7 +93,7 @@ def prepare_dataset(path, batch_size, is_train=True, distributed=False, rank=0, 
 
     return dataloader
 
-def single_device_train(config):
+def single_device_experiment(config):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     if config.logging_enabled:
@@ -119,18 +120,15 @@ def single_device_train(config):
 
     if config.should_evaluate:
         test_dataloader = prepare_dataset(config.test_path, config.test_batch_size, is_train=False, distributed=False)
-        epe = evaluate(dataloader=test_dataloader, model=model, device=device)
-
-        if config.logging_enabled:
-            wandb.log({'epe': epe})
-            print(f'end point error: {epe}')
+        evaluate(dataloader=test_dataloader, model=model, device=device,
+                 logging_enabled=config.logging_enabled)
 
     if config.should_visualize:
         visualization_dataloader = prepare_dataset(config.visualization_path, config.visualization_batch_size, is_train=False, distributed=False)
         visualize(dataloader=visualization_dataloader, model=model, device=device, 
                   num_samples=config.visualization_samples)
 
-def distributed_train(rank, world_size, config, experiment_id):
+def distributed_experiment(rank, world_size, config, experiment_id):
     dist.init_process_group(backend='nccl', rank=rank, world_size=world_size)
     torch.cuda.set_device(rank)
 
@@ -160,11 +158,8 @@ def distributed_train(rank, world_size, config, experiment_id):
 
         if config.should_evaluate:
             test_dataloader = prepare_dataset(config.test_path, config.test_batch_size, is_train=False, distributed=True, rank=rank, world_size=world_size)
-            epe = evaluate(dataloader=test_dataloader, model=model, device=rank)
-
-            if config.logging_enabled and rank==0:
-                wandb.log({'epe': epe})
-                print(f'end point error: {epe}')
+            evaluate(dataloader=test_dataloader, model=model, device=rank,
+                     logging_enabled=config.logging_enabled)
 
         if config.should_visualize:
             visualization_dataloader = prepare_dataset(config.visualization_path, config.visualization_batch_size, is_train=False, distributed=True, rank=rank, world_size=world_size)
@@ -175,22 +170,22 @@ def distributed_train(rank, world_size, config, experiment_id):
         dist.barrier()
         dist.destroy_process_group()
 
-def multi_device_train(config):
+def multi_device_experiment(config):
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '12355'
 
     world_size = torch.cuda.device_count()
     experiment_id = str(uuid.uuid4())
-    mp.spawn(distributed_train, args=(world_size, config, experiment_id,), nprocs=world_size, join=True)
+    mp.spawn(distributed_experiment, args=(world_size, config, experiment_id,), nprocs=world_size, join=True)
 
 if __name__ == '__main__':
     config = ExperimentConfig(
         data_parallel=True,
-        logging_enabled=True,
+        logging_enabled=False,
         checkpointing_enabled=True,
         initialize_from_checkpoint=True,
         should_pre_train=False,
-        should_fine_tune=True,
+        should_fine_tune=False,
         should_evaluate=True,
         should_visualize=False,
         pre_train_path='../data1/waymo_dataset/v1.1/tensor_cache/training',
@@ -207,9 +202,9 @@ if __name__ == '__main__':
         fine_tune_lr=1e-5,
         fine_tune_weight_decay=0,
         fine_tune_gamma=0.999,
-        test_batch_size=16,
+        test_batch_size=1,
         visualization_batch_size=1,
-        visualization_samples=10,
+        visualization_samples=100,
         road_map_image_size=256,
         road_map_window_size=8,
         trajectory_feature_dim=10,
@@ -222,6 +217,6 @@ if __name__ == '__main__':
         wandb.login()
 
     if torch.cuda.is_available() and config.data_parallel:
-        multi_device_train(config)
+        multi_device_experiment(config)
     else:
-        single_device_train(config)
+        single_device_experiment(config)

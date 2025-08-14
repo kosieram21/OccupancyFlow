@@ -1,3 +1,5 @@
+import os # delete me
+import wandb
 import torch
 import torch.distributed as dist
 from datasets.Waymo import get_image_velocity
@@ -26,13 +28,19 @@ def aggregate_epe(epe):
 
     return total_epe.item()
 
-def evaluate(dataloader, model, device):
+def evaluate(dataloader, model, device,
+             logging_enabled=False):
     model.eval()
+
+    if logging_enabled:
+        wandb.define_metric("evaluate batch epe", step_metric="evaluate batch")
+        wandb.define_metric("evaluate batch", hidden=True)
 
     with torch.no_grad():
         epe_sum = 0
-        count = 0
-
+        num_batches = 0
+        num_scenes = 0
+        
         for batch in dataloader:
             road_map, agent_trajectories, \
             flow_field_agent_ids, flow_field_positions, flow_field_times, flow_field_velocities, \
@@ -55,10 +63,21 @@ def evaluate(dataloader, model, device):
             world_flow = torch.from_numpy(world_flow).to(device)
 
             batch_epe, scenes_in_batch = end_point_error(world_velocities, world_flow, flow_field_mask)
-            epe_sum += batch_epe
-            count += scenes_in_batch
 
-        epe_score = epe_sum / count
+            if logging_enabled:
+                avg_batch_epe = aggregate_epe(batch_epe / scenes_in_batch)
+                wandb.log({"eveluate batch epe": avg_batch_epe, "evaluate batch": num_batches})
+                print(f'Batch {num_batches+1} (pre-train), EPE: {avg_batch_epe:.6f}')
+
+            epe_sum += batch_epe
+            num_batches += 1
+            num_scenes += scenes_in_batch
+
+        epe_score = epe_sum / num_scenes
         epe_score = aggregate_epe(epe_score)
+
+    if logging_enabled:
+        wandb.log({'epe': epe_score})
+        print(f'end point error: {epe_score}')
 
     return epe_score
