@@ -1,8 +1,35 @@
 import os
 import wandb
 import torch
+import torch.nn as nn
 import torch.distributed as dist
 from collections import defaultdict
+
+class OccupancyFlowNetTrainingHarness(nn.Module):
+    def __init__(self, base_model):
+        super().__init__()
+        self.base_model = base_model
+
+class OccupancyFlowNetPreTrainingHarness(OccupancyFlowNetTrainingHarness):
+    def forward(self, times, positions, velocities, road_map, agent_trajectories, agent_mask=None, flow_field_mask=None):
+        flow_loss, _ = flow_matching(self.base_model, times, positions, velocities, road_map, agent_trajectories, agent_mask, flow_field_mask)
+        return flow_loss
+    
+class OccupancyFlowNetFineTuningHarness(OccupancyFlowNetTrainingHarness):
+    def forward(self, times, positions, velocities, road_map, agent_trajectories, agent_ids, agent_mask=None, flow_field_mask=None):
+        flow_loss, scene_context = flow_matching(self.base_model, times, positions, velocities, road_map, agent_trajectories, agent_mask, flow_field_mask)
+        occupancy_loss = occupancy_alignment(self.base_model.flow_field, agent_ids, positions, times, scene_context, flow_field_mask, forecast_horizon=91)
+        return flow_loss, occupancy_loss
+    
+class OccupancyFlowNetPostTrainingHarness(OccupancyFlowNetTrainingHarness):
+    def forward(self, times, positions, road_map, agent_trajectories, agent_ids, agent_mask=None):
+        # TODO: need to split times and positions based on agents present in the observed window and those who are not
+        # TODO: we would need to produce a large amount of dummy values and drive them down to 0
+        # TODO: basic idea... generate tuples creating a mesh over the scene. tuples that are occupied should have gt 1 otherwise 0
+        # TODO: what should we call the loss (binary cross-entropy) for occupancy estimation...
+        occupancy_loss = 0
+        occluded_occupancy_loss = 0
+        return occupancy_loss, occluded_occupancy_loss
 
 def move_batch_to_device(batch, device):
     road_map, agent_trajectories, \
@@ -24,6 +51,7 @@ def move_batch_to_device(batch, device):
         agent_mask, flow_field_mask
 
 # TODO: should this be moved to a shared location?
+# TODO: maybe we should have 3 different datasets? Pre-train, Finetune, Post-train
 def aggregate_loss(loss):
     total_loss = loss.clone()
 
@@ -33,9 +61,9 @@ def aggregate_loss(loss):
 
     return total_loss.item()
 
-def save_checkpoint(model, checkpoint_root, checkpoint_id):
+def save_checkpoint(training_model, checkpoint_root, checkpoint_id):
     os.makedirs(checkpoint_root, exist_ok=True)
-    params = model.module if dist.is_initialized() else model
+    params = training_model.module.base_model if dist.is_initialized() else training_model.base_model
     torch.save(params.state_dict(), os.path.join(checkpoint_root, f'{checkpoint_id}.pt'))
 
 # TODO: I wonder if this should be part of the waymo collate function
@@ -122,7 +150,6 @@ def occupancy_alignment(flow_field, agent_ids, positions, times, scene_context, 
         count += 1
     
     return loss / count
-    
 
 def scene_occupancy_alignment(flow_field, agent_ids, positions, times, scene_context, forecast_horizon=91):
     trajectories, present, initial_values, agent_offsets, integration_times, ids = construct_agent_trajectories(agent_ids, positions, times, forecast_horizon)
@@ -146,9 +173,13 @@ def scene_occupancy_alignment(flow_field, agent_ids, positions, times, scene_con
 def pre_train(dataloader, model, device,
               epochs, lr, weight_decay, gamma, 
               logging_enabled=False, checkpointing_enabled=False):
-    model.train()
+    pre_train_harness = OccupancyFlowNetPreTrainingHarness(model)
+    if dist.is_initialized():
+        pre_train_harness = nn.parallel.DistributedDataParallel(pre_train_harness, device_ids=[device], find_unused_parameters=True)
 
-    optim = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    pre_train_harness.train()
+
+    optim = torch.optim.Adam(pre_train_harness.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optim, gamma=gamma)
 
     if logging_enabled:
@@ -167,10 +198,9 @@ def pre_train(dataloader, model, device,
             flow_field_agent_ids, flow_field_positions, flow_field_times, flow_field_velocities, \
             agent_mask, flow_field_mask = move_batch_to_device(batch, device)
 
-            loss, _ = flow_matching(model, 
-                                    flow_field_times, flow_field_positions, flow_field_velocities, 
-                                    road_map, agent_trajectories, 
-                                    agent_mask, flow_field_mask)
+            loss = pre_train_harness(flow_field_times, flow_field_positions, flow_field_velocities, 
+                                     road_map, agent_trajectories, 
+                                     agent_mask, flow_field_mask)
             
             total_loss = aggregate_loss(loss.detach())
 
@@ -180,7 +210,7 @@ def pre_train(dataloader, model, device,
 
             optim.zero_grad()
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            torch.nn.utils.clip_grad_norm_(pre_train_harness.parameters(), max_norm=1.0)
             optim.step()
 
             epoch_loss += total_loss
@@ -196,20 +226,22 @@ def pre_train(dataloader, model, device,
             print(f'Epoch {epoch+1}/{epochs} (pre-train), Loss: {avg_loss:.6f}, LR: {scheduler.get_last_lr()[0]:.6f}')
 
         if checkpointing_enabled:
-            save_checkpoint(model, f'checkpoints/pretrain', f'occupancy_flow_checkpoint{epoch}')
+            save_checkpoint(pre_train_harness, f'checkpoints/pretrain', f'occupancy_flow_checkpoint{epoch}')
 
 def fine_tune(dataloader, model, device,
               epochs, lr, weight_decay, gamma,
               logging_enabled=False, checkpointing_enabled=False):
-    model.train()
+    fine_tune_harness = OccupancyFlowNetFineTuningHarness(model)
+    if dist.is_initialized():
+        fine_tune_harness = nn.parallel.DistributedDataParallel(fine_tune_harness, device_ids=[device], find_unused_parameters=True)
 
-    scene_encoder = model.module.scene_encoder if dist.is_initialized() else model.scene_encoder
-    flow_field = model.module.flow_field if dist.is_initialized() else model.flow_field
+    fine_tune_harness.train()
 
+    scene_encoder = fine_tune_harness.module.base_model.scene_encoder if dist.is_initialized() else fine_tune_harness.base_model.scene_encoder
     for param in scene_encoder.parameters():
         param.requires_grad = False
 
-    optim = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    optim = torch.optim.Adam(fine_tune_harness.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optim, gamma=gamma)
 
     if logging_enabled:
@@ -233,20 +265,11 @@ def fine_tune(dataloader, model, device,
             road_map, agent_trajectories, \
             flow_field_agent_ids, flow_field_positions, flow_field_times, flow_field_velocities, \
             agent_mask, flow_field_mask = move_batch_to_device(batch, device)
-
-            with torch.no_grad():
-                scene_context = scene_encoder(road_map, agent_trajectories, agent_mask)
             
-            flow_loss, scene_context = flow_matching(model, 
-                                                     flow_field_times, flow_field_positions, flow_field_velocities,
-                                                     road_map, agent_trajectories, 
-                                                     agent_mask, flow_field_mask)
-
-            occupancy_loss = occupancy_alignment(flow_field, 
-                                                 flow_field_agent_ids, flow_field_positions, flow_field_times,
-                                                 scene_context,
-                                                 flow_field_mask,
-                                                 forecast_horizon=91)
+            flow_loss, occupancy_loss = fine_tune_harness(flow_field_times, flow_field_positions, flow_field_velocities, 
+                                                          road_map, agent_trajectories, 
+                                                          flow_field_agent_ids, 
+                                                          agent_mask, flow_field_mask)
             
             loss = flow_loss + occupancy_loss
 
@@ -266,7 +289,7 @@ def fine_tune(dataloader, model, device,
 
             optim.zero_grad()
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            torch.nn.utils.clip_grad_norm_(fine_tune_harness.parameters(), max_norm=1.0)
             optim.step()
 
             epoch_loss += total_loss
@@ -291,4 +314,7 @@ def fine_tune(dataloader, model, device,
             print(f'Epoch {epoch+1}/{epochs} (fine-tune), Loss: {avg_loss:.6f}, Flow Loss: {avg_flow_loss:.6f}, Occupancy Loss: {avg_occupancy_loss:.6f} LR: {scheduler.get_last_lr()[0]:.6f}')
 
         if checkpointing_enabled:
-            save_checkpoint(model, f'checkpoints/finetune', f'occupancy_flow_checkpoint{epoch}')
+            save_checkpoint(fine_tune_harness, f'checkpoints/finetune', f'occupancy_flow_checkpoint{epoch}')
+
+def post_train(dataloader, model, device):
+    return None

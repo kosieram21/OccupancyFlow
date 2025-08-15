@@ -4,3 +4,4 @@ from .FiLM import FiLM
 from .SelfAttentionTransformer import SelfAttentionTransformer
 from .CrossAttentionTransformer import CrossAttentionTransformer
 from .SwinTransformer import SwinTransformer
+from .ConditionedMLP import ConditionedMLP

@@ -1,4 +1,3 @@
-import os # delete me
 import wandb
 import torch
 import torch.distributed as dist
@@ -40,7 +39,7 @@ def evaluate(dataloader, model, device,
         epe_sum = 0
         num_batches = 0
         num_scenes = 0
-        
+
         for batch in dataloader:
             road_map, agent_trajectories, \
             flow_field_agent_ids, flow_field_positions, flow_field_times, flow_field_velocities, \

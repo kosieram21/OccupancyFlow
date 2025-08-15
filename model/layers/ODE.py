@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from model.layers.FiLM import FiLM
 	
+# TODO: this should be changed to use the conditioned mlp layer
 class ODEFunc(nn.Module):
 	def __init__(self, input_dim, condition_dim, hidden_dims, num_fourier_features, include_x=False):
 		super(ODEFunc, self).__init__()

@@ -159,6 +159,7 @@ def render_flow_field(model, road_map,
                       grid_size, stride, timesteps, freq, 
                       scene_context,
                       save_path=None):
+    # TODO: perhaps this code block should be shared
     y_coords = np.arange(0, grid_size, stride)
     x_coords = np.arange(0, grid_size, stride)
     grid_x, grid_y = np.meshgrid(x_coords, y_coords)
@@ -177,6 +178,7 @@ def render_flow_field(model, road_map,
 
     grid_points = grid_points.to(road_map.device)
     grid_times = grid_times.to(road_map.device)
+    # todo: end shared region
 
     estimated_flow_at_grid = model.flow_field(grid_times, grid_points, scene_context)
     return render_flow_at_spacetime(road_map[0].cpu(), 

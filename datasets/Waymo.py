@@ -631,6 +631,79 @@ def collate_target_flow_field(data, type_mask):
         torch.FloatTensor(agent_velocities),
     )
 
+def collate_target_occupancy_grids(data):
+    type_mask = data['state/type'] == 1 # vehicles... TODO: we should take this in as an argument
+
+    past_positions = np.stack((data['state/past/x'], data['state/past/y']), axis=-1)
+    current_position = np.stack((data['state/current/x'], data['state/current/y']), axis=-1)
+    future_positions = np.stack((data['state/future/x'], data['state/future/y']), axis=-1)
+    agent_positions = np.concatenate((past_positions, current_position, future_positions), axis=1)
+    agent_positions = agent_positions[type_mask]
+
+    max_agents, timesteps, xy = agent_positions.shape
+
+    is_valid = np.concatenate((data['state/past/valid'], data['state/current/valid'], data['state/future/valid']), axis=1)
+
+    agent_lengths = np.concatenate((data['state/past/length'], data['state/current/length'], data['state/future/length']), axis=1)
+    agent_lengths = agent_lengths[type_mask]
+    max_length = np.max(agent_lengths, axis=1, keepdims=True)
+    
+    agent_widths = np.concatenate((data['state/past/width'], data['state/current/width'], data['state/future/width']), axis=1)
+    agent_widths = agent_widths[type_mask]
+    max_width = np.max(agent_widths, axis=1, keepdims=True)
+
+    agent_bbox_yaws = np.concatenate((data['state/past/bbox_yaw'], data['state/current/bbox_yaw'], data['state/future/bbox_yaw']), axis=1)
+    agent_bbox_yaws = agent_bbox_yaws[type_mask]
+
+    agent_ids = data['state/id'][type_mask]
+
+    print(f'is_valid: {is_valid.shape}')
+    print(f'agent_lengths: {agent_lengths.shape}')
+    print(f'agent_widths: {agent_widths.shape}')
+    print(f'agent_bbox_yaws: {agent_bbox_yaws.shape}')
+    print(f'agent_ids: {agent_ids.shape}')
+
+    y_coords = np.arange(0, GRID_SIZE, 1)
+    x_coords = np.arange(0, GRID_SIZE, 1)
+    grid_x, grid_y = np.meshgrid(x_coords, y_coords)
+    grid_points = np.stack((grid_x, grid_y), axis=-1)
+    grid_points = get_world_coordinates(grid_points)
+    grid_points = torch.FloatTensor(grid_points)
+
+    grid_points = grid_points.unsqueeze(2).repeat(1, 1, timesteps, 1)
+
+    grid_times = torch.arange(timesteps, dtype=torch.float32) / 10
+    grid_times = grid_times.view(1, 1, timesteps, 1).repeat(GRID_SIZE, GRID_SIZE, 1, 1)
+
+    occupancy_grid = torch.zeros_like(grid_times)
+    occluded_occupancy_grid = torch.zeros_like(grid_times)
+
+    print('-------------------')
+    print(f'agent positions: {agent_positions.shape}')
+    print(f'occupancy grid: {occupancy_grid.shape}')
+    print(f'occluded occupancy grid: {occluded_occupancy_grid.shape}')
+    for i in range(timesteps):
+        agent_positions_at_time = agent_positions[:, i]
+        is_valid_at_time = is_valid[:, i]
+        agent_lengths_at_time = agent_lengths[:, i]
+        agent_widths_at_time = agent_widths[:, i]
+        agent_bbox_yaws_at_time = agent_bbox_yaws[:, i]
+
+        centered_and_rotated_agent_positions, angle, translation = normalize_about_sdc(agent_positions, data)
+        centered_and_rotated_agent_positions[:, 1] = -centered_and_rotated_agent_positions[:, 1]
+        centered_and_rotated_image_agent_positions = get_image_coordinates(centered_and_rotated_agent_positions)
+
+        fov_mask = get_fov_mask(centered_and_rotated_image_agent_positions)
+        #fov_mask = fov_mask.reshape(max_agents, timesteps)
+        print(f'fov mask at time: {fov_mask.shape}')
+        print(f'agent positions at time: {agent_positions_at_time.shape}')
+        print(f'is valid at time: {is_valid_at_time.shape}')
+        print(f'agent lengths at time: {agent_lengths_at_time.shape}')
+        print(f'agent widths at time: {agent_widths_at_time.shape}')
+        print(f'agent bbox yaws at time: {agent_bbox_yaws_at_time.shape}')
+
+    return occupancy_grid, occluded_occupancy_grid
+
 def pad_tensors(tensors, max_size):
     padded_tensors = []
     masks = []
@@ -675,14 +748,21 @@ def waymo_collate_fn(batch):
     cyclist_flow_field_velocities = []
 
     for data in batch:
+        # model inputs
         road_maps.append(rasterize_road_map(data))
         agent_trajectories.append(collate_agent_trajectories(data))
 
+        # ground truth flow field
         ids, pos, t, vel = collate_target_flow_fields(data)
         flow_field_agent_ids.append(ids)
         flow_field_positions.append(pos)
         flow_field_times.append(t)
         flow_field_velocities.append(vel)
+
+        # TODO: do we need something for occupancy alignment finetuning?
+
+        # ground truth occupancy gird
+        occupancy_grid, occluded_occupancy_grid = collate_target_occupancy_grids(data)
 
     max_agents = max(t.shape[0] for t in agent_trajectories)
     max_agent_positions = max(p.shape[0] for p in flow_field_positions)

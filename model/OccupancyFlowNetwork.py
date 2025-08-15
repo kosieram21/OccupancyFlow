@@ -1,6 +1,7 @@
 import torch # TODO: delete me
 import torch.nn as nn
 from model.layers.ODE import ODE
+from model.layers.ConditionedMLP import ConditionedMLP
 from model.SceneEncoder import SceneEncoder
 
 class OccupancyFlowNetwork(nn.Module):
@@ -18,6 +19,10 @@ class OccupancyFlowNetwork(nn.Module):
 		self.flow_field = ODE(2, embedding_dim, 
 							 (flow_field_hidden_dim for _ in range(4)), 
 							  flow_field_fourier_features)
+		
+		# TODO: we are post training these guys. Should the be trained during the pre-train?
+		self.occupancy_estimation_head = None
+		self.occluded_occupancy_estimation_head = None
 
 	def forward(self, t, h, road_map, agent_trajectories, agent_mask=None):
 		scene_context = self.scene_encoder(road_map, agent_trajectories, agent_mask)
@@ -28,3 +33,11 @@ class OccupancyFlowNetwork(nn.Module):
 		scene_context = self.scene_encoder(road_map, agent_trajectories, agent_mask)
 		estimated_occupancy = self.flow_field.solve_ivp(occupancy, integration_times, scene_context)
 		return estimated_occupancy, scene_context
+	
+	def estimate_occupancy(self, t, h, road_map, agent_trajectories, agent_mask=None):
+		scene_context = self.scene_encoder(road_map, agent_trajectories, agent_mask)
+		return None
+	
+	def estimate_occluded_occupancy(self, t, h, road_map, agent_trajectories, agent_mask=None):
+		scene_context = self.scene_encoder(road_map, agent_trajectories, agent_mask)
+		return None

@@ -2,7 +2,6 @@ import os
 import uuid
 import wandb
 import torch
-import torch.nn as nn
 import torch.distributed as dist
 import torch.multiprocessing as mp
 from torch.utils.data import DataLoader
@@ -10,7 +9,7 @@ from torch.utils.data.distributed import DistributedSampler
 from dataclasses import dataclass
 from datasets import WaymoCached, waymo_cached_collate_fn
 from model import OccupancyFlowNetwork
-from train import pre_train, fine_tune
+from train import pre_train, fine_tune, post_train
 from evaluate import evaluate
 from visualize import visualize
 
@@ -63,11 +62,6 @@ def build_model(config, device):
         #model.load_state_dict(torch.load(f'checkpoints/pretrain/occupancy_flow_checkpoint{config.pre_train_epochs - 1}.pt'))
         model.load_state_dict(torch.load(f'checkpoints/finetune/occupancy_flow_checkpoint12.pt'))
         #model.load_state_dict(torch.load(f'checkpoints/pretrain/occupancy_flow_checkpoint99.pt'))
-        # TODO: delete the alternative model loading logic
-        #checkpoint = 1
-        #state_dict = torch.load(f'checkpoints/occupancy_flow_checkpoint{checkpoint}.pt')
-        #corrected_state_dict = {k.replace("scence_encoder", "scene_encoder"): v for k, v in state_dict.items()} # TODO: delete me
-        #model.load_state_dict(corrected_state_dict)
 
     return model
 
@@ -142,7 +136,6 @@ def distributed_experiment(rank, world_size, config, experiment_id):
 
     try:
         model = build_model(config, rank)
-        model = nn.parallel.DistributedDataParallel(model, device_ids=[rank], find_unused_parameters=True)
 
         if config.should_pre_train:
             pre_train_dataloader = prepare_dataset(config.pre_train_path, config.pre_train_batch_size, is_train=True, distributed=True, rank=rank, world_size=world_size)
