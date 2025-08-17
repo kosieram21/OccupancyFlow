@@ -534,11 +534,11 @@ def collate_target_flow_fields(data):
     vehicle_type_mask = data['state/type'] == 1
     vehicle_agent_ids, vehicle_agent_positions, vehicle_agent_times, vehicle_agent_velocities = collate_target_flow_field(data, vehicle_type_mask)
 
-    pedestrian_type_mask = data['state/type'] == 2
-    pedestrian_agent_ids, pedestrian_agent_positions, pedestrian_agent_times, pedestrian_agent_velocities = collate_target_flow_field(data, pedestrian_type_mask)
+    #pedestrian_type_mask = data['state/type'] == 2
+    #pedestrian_agent_ids, pedestrian_agent_positions, pedestrian_agent_times, pedestrian_agent_velocities = collate_target_flow_field(data, pedestrian_type_mask)
 
-    cyclist_type_mask = data['state/type'] == 3
-    cyclist_agent_ids, cyclist_agent_positions, cyclist_agent_times, cyclist_agent_velocities = collate_target_flow_field(data, pedestrian_type_mask)
+    #cyclist_type_mask = data['state/type'] == 3
+    #cyclist_agent_ids, cyclist_agent_positions, cyclist_agent_times, cyclist_agent_velocities = collate_target_flow_field(data, pedestrian_type_mask)
 
     return vehicle_agent_ids, vehicle_agent_positions, vehicle_agent_times, vehicle_agent_velocities
 
@@ -558,7 +558,7 @@ def collate_target_flow_field(data, type_mask):
 
     max_agents, timesteps, xy = agent_positions.shape
     agent_positions = agent_positions.reshape(-1, xy)
-    
+
     centered_and_rotated_agent_positions, angle, translation = normalize_about_sdc(agent_positions, data)
     centered_and_rotated_agent_positions[:, 1] = -centered_and_rotated_agent_positions[:, 1]
     centered_and_rotated_image_agent_positions = get_image_coordinates(centered_and_rotated_agent_positions)
@@ -642,67 +642,65 @@ def collate_target_occupancy_grids(data):
 
     max_agents, timesteps, xy = agent_positions.shape
 
-    is_valid = np.concatenate((data['state/past/valid'], data['state/current/valid'], data['state/future/valid']), axis=1)
-
     agent_lengths = np.concatenate((data['state/past/length'], data['state/current/length'], data['state/future/length']), axis=1)
     agent_lengths = agent_lengths[type_mask]
-    max_length = np.max(agent_lengths, axis=1, keepdims=True)
     
     agent_widths = np.concatenate((data['state/past/width'], data['state/current/width'], data['state/future/width']), axis=1)
     agent_widths = agent_widths[type_mask]
-    max_width = np.max(agent_widths, axis=1, keepdims=True)
 
     agent_bbox_yaws = np.concatenate((data['state/past/bbox_yaw'], data['state/current/bbox_yaw'], data['state/future/bbox_yaw']), axis=1)
     agent_bbox_yaws = agent_bbox_yaws[type_mask]
 
     agent_ids = data['state/id'][type_mask]
 
-    print(f'is_valid: {is_valid.shape}')
-    print(f'agent_lengths: {agent_lengths.shape}')
-    print(f'agent_widths: {agent_widths.shape}')
-    print(f'agent_bbox_yaws: {agent_bbox_yaws.shape}')
-    print(f'agent_ids: {agent_ids.shape}')
+    is_valid = np.concatenate((data['state/past/valid'], data['state/current/valid'], data['state/future/valid']), axis=1)
+    is_valid_mask = is_valid[type_mask] > 0.
 
+    # TODO: can we make this a shared reusable function?
     y_coords = np.arange(0, GRID_SIZE, 1)
     x_coords = np.arange(0, GRID_SIZE, 1)
     grid_x, grid_y = np.meshgrid(x_coords, y_coords)
+
     grid_points = np.stack((grid_x, grid_y), axis=-1)
     grid_points = get_world_coordinates(grid_points)
     grid_points = torch.FloatTensor(grid_points)
-
     grid_points = grid_points.unsqueeze(2).repeat(1, 1, timesteps, 1)
 
     grid_times = torch.arange(timesteps, dtype=torch.float32) / 10
     grid_times = grid_times.view(1, 1, timesteps, 1).repeat(GRID_SIZE, GRID_SIZE, 1, 1)
+    # END TODO
 
     occupancy_grid = torch.zeros_like(grid_times)
     occluded_occupancy_grid = torch.zeros_like(grid_times)
 
-    print('-------------------')
-    print(f'agent positions: {agent_positions.shape}')
-    print(f'occupancy grid: {occupancy_grid.shape}')
-    print(f'occluded occupancy grid: {occluded_occupancy_grid.shape}')
     for i in range(timesteps):
         agent_positions_at_time = agent_positions[:, i]
-        is_valid_at_time = is_valid[:, i]
         agent_lengths_at_time = agent_lengths[:, i]
         agent_widths_at_time = agent_widths[:, i]
         agent_bbox_yaws_at_time = agent_bbox_yaws[:, i]
+        is_valid_mask_at_time = is_valid_mask[:, i]
 
-        centered_and_rotated_agent_positions, angle, translation = normalize_about_sdc(agent_positions, data)
-        centered_and_rotated_agent_positions[:, 1] = -centered_and_rotated_agent_positions[:, 1]
-        centered_and_rotated_image_agent_positions = get_image_coordinates(centered_and_rotated_agent_positions)
+        centered_and_rotated_agent_positions_at_time, angle, translation = normalize_about_sdc(agent_positions_at_time, data)
+        centered_and_rotated_agent_positions_at_time[:, 1] = -centered_and_rotated_agent_positions_at_time[:, 1]
+        centered_and_rotated_image_agent_positions_at_time = get_image_coordinates(centered_and_rotated_agent_positions_at_time)
 
-        fov_mask = get_fov_mask(centered_and_rotated_image_agent_positions)
-        #fov_mask = fov_mask.reshape(max_agents, timesteps)
-        print(f'fov mask at time: {fov_mask.shape}')
-        print(f'agent positions at time: {agent_positions_at_time.shape}')
-        print(f'is valid at time: {is_valid_at_time.shape}')
+        fov_mask_at_time = get_fov_mask(centered_and_rotated_image_agent_positions_at_time)
+        point_mask_at_time = np.logical_and(fov_mask_at_time, is_valid_mask_at_time)
+
+        centered_and_rotated_agent_positions_at_time = centered_and_rotated_agent_positions_at_time[point_mask_at_time]
+        agent_lengths_at_time = agent_bbox_yaws_at_time[point_mask_at_time]
+        agent_widths_at_time = agent_widths_at_time[point_mask_at_time]
+        agent_bbox_yaws_at_time = agent_bbox_yaws_at_time[point_mask_at_time]
+        agent_ids_at_time = agent_ids[point_mask_at_time]
+
+        print('-------------------')
+        print(f'agent positions at time: {centered_and_rotated_agent_positions_at_time.shape}')
         print(f'agent lengths at time: {agent_lengths_at_time.shape}')
         print(f'agent widths at time: {agent_widths_at_time.shape}')
         print(f'agent bbox yaws at time: {agent_bbox_yaws_at_time.shape}')
+        print(f'agent ids at time: {agent_ids_at_time.shape}')
 
-    return occupancy_grid, occluded_occupancy_grid
+    return grid_points, grid_times, occupancy_grid, occluded_occupancy_grid
 
 def pad_tensors(tensors, max_size):
     padded_tensors = []
@@ -762,7 +760,7 @@ def waymo_collate_fn(batch):
         # TODO: do we need something for occupancy alignment finetuning?
 
         # ground truth occupancy gird
-        occupancy_grid, occluded_occupancy_grid = collate_target_occupancy_grids(data)
+        grid_points, grid_times, occupancy_grid, occluded_occupancy_grid = collate_target_occupancy_grids(data)
 
     max_agents = max(t.shape[0] for t in agent_trajectories)
     max_agent_positions = max(p.shape[0] for p in flow_field_positions)
