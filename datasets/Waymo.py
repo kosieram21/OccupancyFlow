@@ -634,6 +634,8 @@ def collate_target_flow_field(data, type_mask):
 def collate_target_occupancy_grids(data):
     type_mask = data['state/type'] == 1 # vehicles... TODO: we should take this in as an argument
 
+    observed_agents = set()
+
     past_positions = np.stack((data['state/past/x'], data['state/past/y']), axis=-1)
     current_position = np.stack((data['state/current/x'], data['state/current/y']), axis=-1)
     future_positions = np.stack((data['state/future/x'], data['state/future/y']), axis=-1)
@@ -661,7 +663,7 @@ def collate_target_occupancy_grids(data):
     x_coords = np.arange(0, GRID_SIZE, 1)
     grid_x, grid_y = np.meshgrid(x_coords, y_coords)
 
-    grid_points = np.stack((grid_x, grid_y), axis=-1)
+    grid_points = np.stack((grid_x, grid_y), axis=-1) # What coordinate system should this be in???
     grid_points = get_world_coordinates(grid_points)
     grid_points = torch.FloatTensor(grid_points)
     grid_points = grid_points.unsqueeze(2).repeat(1, 1, timesteps, 1)
@@ -673,12 +675,12 @@ def collate_target_occupancy_grids(data):
     occupancy_grid = torch.zeros_like(grid_times)
     occluded_occupancy_grid = torch.zeros_like(grid_times)
 
-    for i in range(timesteps):
-        agent_positions_at_time = agent_positions[:, i]
-        agent_lengths_at_time = agent_lengths[:, i]
-        agent_widths_at_time = agent_widths[:, i]
-        agent_bbox_yaws_at_time = agent_bbox_yaws[:, i]
-        is_valid_mask_at_time = is_valid_mask[:, i]
+    for t in range(timesteps):
+        agent_positions_at_time = agent_positions[:, t]
+        agent_lengths_at_time = agent_lengths[:, t]
+        agent_widths_at_time = agent_widths[:, t]
+        agent_bbox_yaws_at_time = agent_bbox_yaws[:, t]
+        is_valid_mask_at_time = is_valid_mask[:, t]
 
         centered_and_rotated_agent_positions_at_time, angle, translation = normalize_about_sdc(agent_positions_at_time, data)
         centered_and_rotated_agent_positions_at_time[:, 1] = -centered_and_rotated_agent_positions_at_time[:, 1]
@@ -693,12 +695,34 @@ def collate_target_occupancy_grids(data):
         agent_bbox_yaws_at_time = agent_bbox_yaws_at_time[point_mask_at_time]
         agent_ids_at_time = agent_ids[point_mask_at_time]
 
+        for i in range(len(agent_ids_at_time)):
+            center = centered_and_rotated_agent_positions_at_time[i]
+            length = agent_lengths_at_time[i]
+            width = agent_widths_at_time[i]
+            yaw = agent_bbox_yaws_at_time[i]
+            id = agent_ids_at_time[i]
+
+            print('!!!!!!!!!!!!!!!!')
+            print(f'center: {center}')
+            print(f'length: {length}')
+            print(f'width: {width}')
+            print(f'yaw: {yaw}')
+            print(f'id: {id}')
+            if t < 11 or id in observed_agents:
+                # set points in occupancy_grid[t] inside the bbox definded by center, length, width, yaw to 1
+                observed_agents.add(id)
+            else:
+                # set points in occluded_occupancy_grid[t] inside the bbox definded by center, length, width, yaw to 1
+                print('occluded')
+                print(f'{t},{id}')
+
         print('-------------------')
         print(f'agent positions at time: {centered_and_rotated_agent_positions_at_time.shape}')
         print(f'agent lengths at time: {agent_lengths_at_time.shape}')
         print(f'agent widths at time: {agent_widths_at_time.shape}')
         print(f'agent bbox yaws at time: {agent_bbox_yaws_at_time.shape}')
         print(f'agent ids at time: {agent_ids_at_time.shape}')
+        print(len(agent_ids_at_time))
 
     return grid_points, grid_times, occupancy_grid, occluded_occupancy_grid
 
