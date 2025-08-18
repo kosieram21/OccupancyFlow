@@ -631,6 +631,18 @@ def collate_target_flow_field(data, type_mask):
         torch.FloatTensor(agent_velocities),
     )
 
+def points_contained_in_bbox(points, center, length, width, yaw):
+    # TODO: can we cull points here to improve efficeny?
+    centered_points = points - center
+    local = rotate_points_around_origin(centered_points, yaw)
+    half_length = length / 2.0
+    half_width = width / 2.0
+    mask = (
+        (local[..., 0] >= -half_length) & (local[..., 0] <= half_length) &
+        (local[..., 1] >= -half_width) & (local[..., 1] <= half_width)
+    )
+    return mask
+
 def collate_target_occupancy_grids(data):
     type_mask = data['state/type'] == 1 # vehicles... TODO: we should take this in as an argument
 
@@ -663,7 +675,7 @@ def collate_target_occupancy_grids(data):
     x_coords = np.arange(0, GRID_SIZE, 1)
     grid_x, grid_y = np.meshgrid(x_coords, y_coords)
 
-    grid_points = np.stack((grid_x, grid_y), axis=-1) # What coordinate system should this be in???
+    grid_points = np.stack((grid_x, grid_y), axis=-1)
     grid_points = get_world_coordinates(grid_points)
     grid_points = torch.FloatTensor(grid_points)
     grid_points = grid_points.unsqueeze(2).repeat(1, 1, timesteps, 1)
@@ -676,6 +688,10 @@ def collate_target_occupancy_grids(data):
     occluded_occupancy_grid = torch.zeros_like(grid_times)
 
     for t in range(timesteps):
+        grid_points_at_time = grid_points[:, :, t, :]
+        occupancy_grid_at_time = occupancy_grid[:, :, t, :]
+        occluded_occupancy_grid_at_time = occluded_occupancy_grid[:, :, t, :]
+
         agent_positions_at_time = agent_positions[:, t]
         agent_lengths_at_time = agent_lengths[:, t]
         agent_widths_at_time = agent_widths[:, t]
@@ -702,27 +718,13 @@ def collate_target_occupancy_grids(data):
             yaw = agent_bbox_yaws_at_time[i]
             id = agent_ids_at_time[i]
 
-            print('!!!!!!!!!!!!!!!!')
-            print(f'center: {center}')
-            print(f'length: {length}')
-            print(f'width: {width}')
-            print(f'yaw: {yaw}')
-            print(f'id: {id}')
+            bbox_mask = points_contained_in_bbox(grid_points_at_time, center, length, width, -yaw - angle)
+
             if t < 11 or id in observed_agents:
-                # set points in occupancy_grid[t] inside the bbox definded by center, length, width, yaw to 1
+                occupancy_grid_at_time[bbox_mask] = 1.0
                 observed_agents.add(id)
             else:
-                # set points in occluded_occupancy_grid[t] inside the bbox definded by center, length, width, yaw to 1
-                print('occluded')
-                print(f'{t},{id}')
-
-        print('-------------------')
-        print(f'agent positions at time: {centered_and_rotated_agent_positions_at_time.shape}')
-        print(f'agent lengths at time: {agent_lengths_at_time.shape}')
-        print(f'agent widths at time: {agent_widths_at_time.shape}')
-        print(f'agent bbox yaws at time: {agent_bbox_yaws_at_time.shape}')
-        print(f'agent ids at time: {agent_ids_at_time.shape}')
-        print(len(agent_ids_at_time))
+                occluded_occupancy_grid_at_time[bbox_mask] = 1.0
 
     return grid_points, grid_times, occupancy_grid, occluded_occupancy_grid
 
