@@ -798,7 +798,7 @@ def waymo_collate_fn(batch):
         occupancy_grid_positions.append(grid_points)
         occupancy_grid_times.append(grid_times)
         occupancy_grid_occupancies.append(occupancy_grid)
-        occupancy_grid_occluded_occupancies.append(occupancy_grid_occluded_occupancies)
+        occupancy_grid_occluded_occupancies.append(occluded_occupancy_grid)
 
     max_agents = max(t.shape[0] for t in agent_trajectories)
     max_agent_positions = max(p.shape[0] for p in flow_field_positions)
