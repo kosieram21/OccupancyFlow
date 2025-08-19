@@ -68,6 +68,30 @@ def render_observed_scene_state(road_map, agent_trajectories, save_path=None):
 
     plt.close(fig)
 
+def render_ground_truth_occupancy(road_map, occupancy):
+    image = road_map.detach().cpu().numpy() / 255.0
+    H, W, T, _ = occupancy.shape
+
+    fig, ax = plt.subplots()
+    ax.imshow(image, origin='upper')
+    ax.set_xlim(0, W)
+    ax.set_ylim(H, 0)
+    ax.invert_yaxis()
+    ax.axis('off')
+
+    occ0 = occupancy[:, :, 0, 0].numpy()
+    im_occ = ax.imshow(occ0, origin='upper', extent=[0, W, H, 0],
+                       cmap='viridis', vmin=0, vmax=1, alpha=0.6)
+
+    def update(frame):
+        occ_t = occupancy[:, :, frame, 0].numpy()
+        im_occ.set_data(occ_t)
+        ax.set_title(f"t = {frame}")
+        return (im_occ,)
+
+    anim = FuncAnimation(fig, update, frames=T, interval=100, blit=True)
+    return anim
+
 def render_flow_at_spacetime(road_map, times, positions, velocity, save_path=None):
     image_buffer = road_map.numpy() / 255.0
 
