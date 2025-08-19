@@ -632,15 +632,18 @@ def collate_target_flow_field(data, type_mask):
     )
 
 def points_contained_in_bbox(points, center, length, width, yaw):
-    # TODO: can we cull points here to improve efficeny?
+    # TODO: can we cull points here to improve efficeny? (inscribe unaligned rectangle in aligned rectangle for instance)
     centered_points = points - center
     local = rotate_points_around_origin(centered_points, yaw)
     half_length = length / 2.0
     half_width = width / 2.0
+
+    # this is O(n^2)...
     mask = (
         (local[..., 0] >= -half_length) & (local[..., 0] <= half_length) &
         (local[..., 1] >= -half_width) & (local[..., 1] <= half_width)
     )
+
     return mask
 
 def collate_target_occupancy_grids(data):
@@ -756,6 +759,11 @@ def waymo_collate_fn(batch):
     flow_field_times = []
     flow_field_velocities = []
 
+    occupancy_grid_positions = []
+    occupancy_grid_times = []
+    occupancy_grid_occupancies = []
+    occupancy_grid_occluded_occupancies = []
+
     vehicle_flow_field_agent_ids = []
     vehicle_flow_field_positions = []
     vehicle_flow_field_times = []
@@ -787,6 +795,10 @@ def waymo_collate_fn(batch):
 
         # ground truth occupancy gird
         grid_points, grid_times, occupancy_grid, occluded_occupancy_grid = collate_target_occupancy_grids(data)
+        occupancy_grid_positions.append(grid_points)
+        occupancy_grid_times.append(grid_times)
+        occupancy_grid_occupancies.append(occupancy_grid)
+        occupancy_grid_occluded_occupancies.append(occupancy_grid_occluded_occupancies)
 
     max_agents = max(t.shape[0] for t in agent_trajectories)
     max_agent_positions = max(p.shape[0] for p in flow_field_positions)
@@ -802,6 +814,10 @@ def waymo_collate_fn(batch):
     flow_field_positions_batch = torch.stack(flow_field_positions, dim=0)
     flow_field_times_batch = torch.stack(flow_field_times, dim=0)
     flow_field_velocities_batch = torch.stack(flow_field_velocities, dim=0)
+    occupancy_grid_positions_batch = torch.stack(occupancy_grid_positions, dim=0)
+    occupancy_grid_times_batch = torch.stack(occupancy_grid_times, dim=0)
+    occupancy_grid_occupancies_batch = torch.stack(occupancy_grid_occupancies, dim=0)
+    occupancy_grid_occluded_occupancies_batch = torch.stack(occupancy_grid_occluded_occupancies, dim=0)
     agent_mask_batch = torch.stack(agent_mask, dim=0)
     flow_field_mask_batch = torch.stack(flow_field_mask, dim=0)
 
@@ -812,6 +828,11 @@ def waymo_collate_fn(batch):
         flow_field_positions_batch,
         flow_field_times_batch,
         flow_field_velocities_batch,
+        # TODO: ODE fintuning data should be pre-collated as well
+        occupancy_grid_positions_batch,
+        occupancy_grid_times_batch,
+        occupancy_grid_occupancies_batch,
+        occupancy_grid_occluded_occupancies_batch,
         agent_mask_batch,
         flow_field_mask_batch
     )
