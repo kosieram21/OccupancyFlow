@@ -2,6 +2,7 @@ import os
 import glob
 import math
 import matplotlib.pyplot as plt
+from matplotlib.path import Path
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -631,76 +632,26 @@ def collate_target_flow_field(data, type_mask):
         torch.FloatTensor(agent_velocities),
     )
 
-def get_rotated_bbox_corners(center, length, width, yaw, dtype=torch.float32, device="cpu"):
-    cx, cy = center
-    dx = length / 2.0
-    dy = width / 2.0
-    
-    # local corners
-    corners = torch.tensor([
-        [ dx,  dy],
-        [ dx, -dy],
-        [-dx, -dy],
-        [-dx,  dy]
-    ], dtype=dtype, device=device)
-
-    # rotation matrix
-    c, s = math.cos(yaw), math.sin(yaw)
-    R = torch.tensor([
-        [c, -s],
-        [s,  c]
-    ], dtype=dtype, device=device)
-
-    center_tensor = torch.tensor([cx, cy], dtype=dtype, device=device)
-
-    rotated = corners @ R.T + center_tensor
-    return rotated
-
-
-def points_in_polygon(points, polygon):
-    """
-    points:  (...,2) tensor of (x,y)
-    polygon: (M,2) tensor of vertices in order (closed shape, not repeated)
-    returns: boolean mask of points inside polygon
-    """
-    x = points[..., 0]
-    y = points[..., 1]
-    num_vertices = polygon.shape[0]
-
-    inside = torch.zeros_like(x, dtype=torch.bool)
-
-    x0, y0 = polygon[-1]
-    for i in range(num_vertices):
-        x1, y1 = polygon[i]
-        cond = ((y0 > y) != (y1 > y)) & \
-               (x < (x1 - x0) * (y - y0) / (y1 - y0 + 1e-9) + x0)
-        inside ^= cond
-        x0, y0 = x1, y1
-
-    return inside
-
-
-def points_contained_in_bbox2(points, center, length, width, yaw):
-    # match dtype/device to points tensor
-    corners = get_rotated_bbox_corners(
-        center, length, width, yaw,
-        dtype=points.dtype, device=points.device
-    )
-    mask = points_in_polygon(points, corners)
-    return mask
-
 def points_contained_in_bbox(points, center, length, width, yaw):
-    # TODO: can we cull points here to improve efficeny? (inscribe unaligned rectangle in aligned rectangle for instance)
-    centered_points = points - center
-    local = rotate_points_around_origin(centered_points, yaw)
-    half_length = length / 2.0
-    half_width = width / 2.0
+    x_min = -length / 2
+    x_max = length / 2
+    y_min = -width / 2
+    y_max = width / 2
 
-    # this is O(n^2)...
-    mask = (
-        (local[..., 0] >= -half_length) & (local[..., 0] <= half_length) &
-        (local[..., 1] >= -half_width) & (local[..., 1] <= half_width)
-    )
+    corners = np.array([
+        [x_min, y_min],
+        [x_min, y_max],
+        [x_max, y_max],
+        [x_max, y_min]
+    ])
+
+    corners = rotate_points_around_origin(corners, yaw)
+    corners = corners + center
+
+    bbox = Path(corners)
+    
+    mask = bbox.contains_points(points.reshape(-1, 2).numpy())
+    mask = torch.as_tensor(mask.reshape(points.shape[:-1]), dtype=torch.bool)
 
     return mask
 
@@ -779,8 +730,7 @@ def collate_target_occupancy_grids(data):
             yaw = agent_bbox_yaws_at_time[i]
             id = agent_ids_at_time[i]
 
-            #bbox_mask = points_contained_in_bbox(grid_points_at_time, center, length, width, -yaw - angle)
-            bbox_mask = points_contained_in_bbox2(grid_points_at_time, center, length, width, -yaw - angle)
+            bbox_mask = points_contained_in_bbox(grid_points_at_time, center, length, width, -yaw - angle)
 
             if t < 11 or id in observed_agents:
                 occupancy_grid_at_time[bbox_mask] = 1.0

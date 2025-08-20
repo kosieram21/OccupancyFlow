@@ -68,7 +68,7 @@ def render_observed_scene_state(road_map, agent_trajectories, save_path=None):
 
     plt.close(fig)
 
-def render_ground_truth_occupancy(road_map, occupancy, save_path=None):
+def render_ground_truth_occupancy(road_map, occupancy, occluded=False, save_path=None):
     image = road_map.detach().cpu().numpy() / 255.0
     H, W, T, _ = occupancy.shape
 
@@ -86,7 +86,8 @@ def render_ground_truth_occupancy(road_map, occupancy, save_path=None):
     def update(frame):
         occ_t = occupancy[:, :, frame, 0].numpy()
         im_occ.set_data(occ_t)
-        ax.set_title(f"t = {frame}")
+        prefix = 'Occluded Occupancy' if occluded else 'Occupancy'
+        ax.set_title(f'{prefix} (t = {frame/10}s)')
         return (im_occ,)
 
     anim = FuncAnimation(fig, update, frames=T, interval=100, blit=True)
@@ -122,7 +123,7 @@ def render_flow_at_spacetime(road_map, times, positions, velocity, save_path=Non
         group_positions = get_image_coordinates(positions[indices])
         group_velocity = get_image_velocity(velocity[indices])
 
-        ax.set_title(f"Future Flow (t = {time}s)")
+        ax.set_title(f'Flow (t = {time}s)')
     
         x_coords, y_coords = zip(*group_positions)
         ax.scatter(x_coords, y_coords, marker='o', s=5, color='blue')
