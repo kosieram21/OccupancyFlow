@@ -68,7 +68,7 @@ def render_observed_scene_state(road_map, agent_trajectories, save_path=None):
 
     plt.close(fig)
 
-def render_ground_truth_occupancy(road_map, occupancy):
+def render_ground_truth_occupancy(road_map, occupancy, save_path=None):
     image = road_map.detach().cpu().numpy() / 255.0
     H, W, T, _ = occupancy.shape
 
@@ -90,6 +90,13 @@ def render_ground_truth_occupancy(road_map, occupancy):
         return (im_occ,)
 
     anim = FuncAnimation(fig, update, frames=T, interval=100, blit=True)
+
+    if save_path is not None:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        anim.save(save_path, fps=10, dpi=300)
+
+    plt.close(fig)
+
     return anim
 
 def render_flow_at_spacetime(road_map, times, positions, velocity, save_path=None):
