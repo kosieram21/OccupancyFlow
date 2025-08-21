@@ -20,8 +20,12 @@ class OccupancyFlowNetwork(nn.Module):
 							  flow_field_fourier_features)
 		
 		# TODO: we are post training these guys. Should the be trained during the pre-train?
-		self.occupancy_estimation_head = None
-		self.occluded_occupancy_estimation_head = None
+		self.occupancy_estimation_head = ConditionedMLP(2, embedding_dim, 
+													   (flow_field_hidden_dim for _ in range(4)), 
+													    1, flow_field_fourier_features)
+		self.occluded_occupancy_estimation_head = ConditionedMLP(2, embedding_dim, 
+							 									(flow_field_hidden_dim for _ in range(4)), 
+							  									 1, flow_field_fourier_features)
 
 	def forward(self, t, h, road_map, agent_trajectories, agent_mask=None):
 		scene_context = self.scene_encoder(road_map, agent_trajectories, agent_mask)
@@ -35,8 +39,10 @@ class OccupancyFlowNetwork(nn.Module):
 	
 	def estimate_occupancy(self, t, h, road_map, agent_trajectories, agent_mask=None):
 		scene_context = self.scene_encoder(road_map, agent_trajectories, agent_mask)
-		return None
+		occupancy = self.occupancy_estimation_head(t, h, scene_context)
+		return occupancy, scene_context
 	
 	def estimate_occluded_occupancy(self, t, h, road_map, agent_trajectories, agent_mask=None):
 		scene_context = self.scene_encoder(road_map, agent_trajectories, agent_mask)
-		return None
+		occluded_occupancy = self.occluded_occupancy_estimation_head(t, h, scene_context)
+		return occluded_occupancy, scene_context

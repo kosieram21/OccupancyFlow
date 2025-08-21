@@ -54,4 +54,5 @@ class ConditionedMLP(nn.Module):
 	def forward(self, t, h, scene_context):
 		h_fourier = self.compute_positional_fourier_features(h) if self.num_fourier_features > 0 else h
 		h_dot = self._h_dot(t, h_fourier, scene_context)
+		h_dot = torch.sigmoid(h_dot) # TODO: should this be in a seperate occupancy estimate head class?
 		return h_dot
