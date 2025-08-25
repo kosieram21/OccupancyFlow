@@ -4,3 +4,7 @@ from .Waymo import create_idx
 from .WaymoCached import WaymoCached
 from .WaymoCached import waymo_cached_collate_fn
 from .WaymoCached import cache_data
+from .WaymoScene import WaymoScene
+from .WaymoScene import ObservedState
+from .WaymoScene import FlowField
+from .WaymoScene import OccupancyGrid
