@@ -774,7 +774,7 @@ def waymo_collate_fn(batch):
 
     occupancy_grid_positions = []
     occupancy_grid_times = []
-    occupancy_grid_occupancies = []
+    occupancy_grid_unoccluded_occupancies = []
     occupancy_grid_occluded_occupancies = []
 
     vehicle_flow_field_agent_ids = []
@@ -810,7 +810,7 @@ def waymo_collate_fn(batch):
         grid_points, grid_times, occupancy_grid, occluded_occupancy_grid = collate_target_occupancy_grids(data)
         occupancy_grid_positions.append(grid_points)
         occupancy_grid_times.append(grid_times)
-        occupancy_grid_occupancies.append(occupancy_grid)
+        occupancy_grid_unoccluded_occupancies.append(occupancy_grid)
         occupancy_grid_occluded_occupancies.append(occluded_occupancy_grid)
 
     max_agents = max(t.shape[0] for t in agent_trajectories)
@@ -821,46 +821,28 @@ def waymo_collate_fn(batch):
     flow_field_times, _ = pad_tensors(flow_field_times, max_agent_positions)
     flow_field_velocities, _ = pad_tensors(flow_field_velocities, max_agent_positions)
 
-    observed_state = ObservedState(
-        road_map=torch.stack(road_maps, dim=0),
-        agent_trajectories=torch.stack(agent_trajectories, dim=0),
-        agent_mask=torch.stack(agent_mask, dim=0)
-    )
+    road_map_batch = torch.stack(road_maps, dim=0)
+    agent_trajectories_batch = torch.stack(agent_trajectories, dim=0)
 
-    flow_field = FlowField(
-        positions=torch.stack(flow_field_positions, dim=0),
-        times=torch.stack(flow_field_times, dim=0),
-        velocities=torch.stack(flow_field_velocities, dim=0),
-        agent_ids=torch.stack(flow_field_agent_ids, dim=0),
-        flow_mask=torch.stack(flow_field_mask, dim=0)
-    )
+    flow_field_positions_batch = torch.stack(flow_field_positions, dim=0)
+    flow_field_times_batch = torch.stack(flow_field_times, dim=0)
+    flow_field_velocities_batch = torch.stack(flow_field_velocities, dim=0)
+    flow_field_agent_ids_batch = torch.stack(flow_field_agent_ids, dim=0)
     
-    occupancy_grid = OccupancyGrid(
-        positions=torch.stack(occupancy_grid_positions, dim=0),
-        times=torch.stack(occupancy_grid_times, dim=0),
-        unoccluded_occupancies=torch.stack(occupancy_grid_occupancies, dim=0),
-        occluded_occupancies=torch.stack(occupancy_grid_occluded_occupancies, dim=0),
-    )
+    occupancy_grid_positions_batch = torch.stack(occupancy_grid_positions, dim=0)
+    occupancy_grid_times_batch = torch.stack(occupancy_grid_times, dim=0)
+    occupancy_grid_unoccluded_occupancies_batch = torch.stack(occupancy_grid_unoccluded_occupancies, dim=0)
+    occupancy_grid_occluded_occupancies_batch = torch.stack(occupancy_grid_occluded_occupancies, dim=0)
+
+    agent_mask_batch = torch.stack(agent_mask, dim=0)
+    flow_field_mask_batch = torch.stack(flow_field_mask, dim=0)
 
     # TODO: ODE fintuning data should be pre-collated as well
-    waymo_scene = WaymoScene(
-        observed_state=observed_state,
-        flow_field=flow_field,
-        occupancy_grid=occupancy_grid
+    waymo_scene = WaymoScene.from_tensors(
+        road_map_batch, agent_trajectories_batch,
+        flow_field_positions_batch, flow_field_times_batch, flow_field_velocities_batch, flow_field_agent_ids_batch,
+        occupancy_grid_positions_batch, occupancy_grid_times_batch, occupancy_grid_unoccluded_occupancies_batch, occupancy_grid_occluded_occupancies_batch,
+        agent_mask_batch, flow_field_mask_batch
     )
 
-    #return waymo_scene
-    return (
-        waymo_scene.observed_state.road_map,
-        waymo_scene.observed_state.agent_trajectories,
-        waymo_scene.flow_field.agent_ids,
-        waymo_scene.flow_field.positions,
-        waymo_scene.flow_field.times,
-        waymo_scene.flow_field.velocities,
-        waymo_scene.occupancy_grid.positions,
-        waymo_scene.occupancy_grid.times,
-        waymo_scene.occupancy_grid.unoccluded_occupancies,
-        waymo_scene.occupancy_grid.occluded_occupancies,
-        waymo_scene.observed_state.agent_mask,
-        waymo_scene.flow_field.flow_mask
-    )
+    return waymo_scene
