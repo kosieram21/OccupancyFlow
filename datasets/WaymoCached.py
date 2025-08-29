@@ -2,7 +2,7 @@ import os
 import torch
 import torch.nn.functional as F
 from torch.utils.data import Dataset
-from WaymoScene import WaymoScene, ObservedState, FlowField, OccupancyGrid
+from datasets.WaymoScene import WaymoScene
 
 class WaymoCached(Dataset):
     def __init__(self, cache_dir):

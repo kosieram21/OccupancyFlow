@@ -23,9 +23,12 @@ if __name__ == "__main__":
     if not os.path.exists(args.tfrecord_dir):
         raise FileNotFoundError(f"tfrecord directory does not exist: {args.tfrecord_dir}")
 
-    create_idx(args.tfrecord_dir, args.idx_dir)
+    if not os.path.exists(args.idx_dir):
+        create_idx(args.tfrecord_dir, args.idx_dir)
 
-    num_workers = torch.get_num_threads()
+    print(torch.get_num_threads())
+    print(os.cpu_count())
+    num_workers = 1#torch.get_num_threads()
 
     processes = []
     for worker_id in range(num_workers):

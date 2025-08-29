@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from tfrecord.torch.dataset import MultiTFRecordDataset
 from subprocess import call
 from tqdm import tqdm
-from WaymoScene import WaymoScene, ObservedState, FlowField, OccupancyGrid
+from datasets.WaymoScene import WaymoScene
 
 PIXELS_PER_METER = 3.2
 SDC_X_IN_GRID = 128
