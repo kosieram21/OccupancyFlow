@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 from model.layers.ODE import ODE
 from model.layers.ConditionedMLP import ConditionedMLP
@@ -20,12 +21,9 @@ class OccupancyFlowNetwork(nn.Module):
 							  flow_field_fourier_features)
 		
 		# TODO: we are post training these guys. Should the be trained during the pre-train?
-		self.occupancy_estimation_head = ConditionedMLP(2, embedding_dim, 
+		self.occupancy_estimation_head = ConditionedMLP(3, embedding_dim, 
 													   (flow_field_hidden_dim for _ in range(4)), 
-													    1, flow_field_fourier_features)
-		self.occluded_occupancy_estimation_head = ConditionedMLP(2, embedding_dim, 
-							 									(flow_field_hidden_dim for _ in range(4)), 
-							  									 1, flow_field_fourier_features)
+													    2, flow_field_fourier_features)
 
 	def forward(self, t, h, road_map, agent_trajectories, agent_mask=None):
 		scene_context = self.scene_encoder(road_map, agent_trajectories, agent_mask)
@@ -38,11 +36,8 @@ class OccupancyFlowNetwork(nn.Module):
 		return estimated_occupancy, scene_context
 	
 	def estimate_occupancy(self, t, h, road_map, agent_trajectories, agent_mask=None):
+		spatiotemporal_coordinates = torch.cat([h, t], dim=-1)
 		scene_context = self.scene_encoder(road_map, agent_trajectories, agent_mask)
-		occupancy = self.occupancy_estimation_head(t, h, scene_context)
+		occupancy = self.occupancy_estimation_head(spatiotemporal_coordinates, scene_context)
 		return occupancy, scene_context
 	
-	def estimate_occluded_occupancy(self, t, h, road_map, agent_trajectories, agent_mask=None):
-		scene_context = self.scene_encoder(road_map, agent_trajectories, agent_mask)
-		occluded_occupancy = self.occluded_occupancy_estimation_head(t, h, scene_context)
-		return occluded_occupancy, scene_context

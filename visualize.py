@@ -223,10 +223,23 @@ def visualize(dataloader, model, device,
               num_samples):
     samples_processed = 0
 
-    for batch in dataloader:
-        road_map, agent_trajectories, \
-        flow_field_agent_ids, flow_field_positions, flow_field_times, flow_field_velocities, \
-        agent_mask, flow_field_mask = batch
+    for scene in dataloader:
+        road_map = scene.observed_state.road_map
+        agent_trajectories = scene.observed_state.agent_trajectories
+
+        flow_field_agent_ids = scene.flow_field.agent_ids
+        flow_field_positions = scene.flow_field.positions
+        flow_field_times = scene.flow_field.times
+        flow_field_velocities = scene.flow_field.velocities
+
+        # TODO: use these visualization
+        occupancy_grid_positions = scene.occupancy_grid.positions
+        occupancy_grid_times = scene.occupancy_grid.times
+        occupancy_grid_unoccluded_occupancies = scene.occupancy_grid.unoccluded_occupancies
+        occupancy_grid_occluded_occupancies = scene.occupancy_grid.occluded_occupancies
+
+        agent_mask = scene.observed_state.agent_mask
+        flow_field_mask = scene.flow_field.flow_mask
 
         for i in range(road_map.shape[0]):
             samples_processed += 1

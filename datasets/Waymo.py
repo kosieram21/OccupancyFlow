@@ -532,6 +532,13 @@ def expand_to_bounding_box(positions, lengths, widths, values = None, step_size=
 
     return np.array(expanded)
 
+def align_bounding_box_positions(positions, centers, yaws, angle):
+    positions = positions - centers
+    for i in range(positions.shape[0]):
+        positions[i] = rotate_points_around_origin(positions[i], -yaws[i] - angle)
+    positions = positions + centers
+    return positions
+
 def collate_target_flow_fields(data):
     vehicle_type_mask = data['state/type'] == 1
     vehicle_agent_ids, vehicle_agent_positions, vehicle_agent_times, vehicle_agent_velocities = collate_target_flow_field(data, vehicle_type_mask)
@@ -594,6 +601,7 @@ def collate_target_flow_field(data, type_mask):
     agent_ids = agent_ids.reshape(-1, 1)
     agent_ids = agent_ids[point_mask]
 
+    # TODO: do we need the double reshape here?
     agent_positions = centered_and_rotated_agent_positions.reshape(max_agents, timesteps, xy)
     agent_positions = agent_positions.reshape(-1, 2)
     agent_positions = agent_positions[point_mask]
@@ -621,10 +629,7 @@ def collate_target_flow_field(data, type_mask):
     agent_bbox_yaws = expand_to_bounding_box(agent_positions, agent_lengths, agent_widths, agent_bbox_yaws)
     agent_positions = expand_to_bounding_box(agent_positions, agent_lengths, agent_widths)
 
-    agent_positions = agent_positions - agent_centers
-    for i in range(agent_positions.shape[0]):
-        agent_positions[i] = rotate_points_around_origin(agent_positions[i], -agent_bbox_yaws[i] - angle)
-    agent_positions = agent_positions + agent_centers
+    agent_positions = align_bounding_box_positions(agent_positions, agent_centers, agent_bbox_yaws, angle)
 
     return (
         torch.FloatTensor(agent_ids), 
@@ -632,6 +637,20 @@ def collate_target_flow_field(data, type_mask):
         torch.FloatTensor(agent_times), 
         torch.FloatTensor(agent_velocities),
     )
+
+def point_in_polygon(point, polygon):
+    x = point[0]
+    y = point[1]
+    num_vertices = polygon.shape[0]
+    inside = False
+
+    x0, y0 = polygon[-1]
+    for i in range(num_vertices):
+        x1, y1 = polygon[i]
+        intersect = ((y0 > y) != (y1 > y)) and (x < (x1 - x0) * (y - y0) / (y1 - y0 + 1e-12) + x0)
+        inside = not inside if intersect else inside
+        x0, y0 = x1, y1
+    return inside
 
 def points_contained_in_bbox(points, center, length, width, yaw):
     x_min = -length / 2
@@ -654,6 +673,27 @@ def points_contained_in_bbox(points, center, length, width, yaw):
     mask = bbox.contains_points(points.reshape(-1, 2).numpy())
     mask = torch.as_tensor(mask.reshape(points.shape[:-1]), dtype=torch.bool)
 
+    # x_min, y_min = corners.min(axis=0)
+    # x_max, y_max = corners.max(axis=0)
+
+    # H, W, _ = points.shape
+
+    # X = points[0, :, 0]
+    # circumscribed_x_min_index = min(int(np.searchsorted(X, x_min, side="left")), W - 1)
+    # circumscribed_x_max_index = min(int(np.searchsorted(X, x_max, side="left") - 1), W - 1)
+
+    # Y = torch.flip(points[:, 0, 1], dims=[0])
+    # circumscribed_y_min_index = (H - 1) - min(int(np.searchsorted(Y, y_min, side="left")), H - 1)
+    # circumscribed_y_max_index = (H - 1) - min(int(np.searchsorted(Y, y_max, side="left") - 1), H - 1)
+
+    # mask = []
+
+    # for x in range(circumscribed_x_min_index, circumscribed_x_max_index + 1):
+    #     for y in range(circumscribed_y_max_index, circumscribed_y_min_index + 1):
+    #         point = points[y, x, :]
+    #         if point_in_polygon(point, corners):
+    #             mask.append((x, y))
+
     return mask
 
 def collate_target_occupancy_grids(data):
@@ -668,6 +708,13 @@ def collate_target_occupancy_grids(data):
     agent_positions = agent_positions[type_mask]
 
     max_agents, timesteps, xy = agent_positions.shape
+    timesteps = 8
+    #agent_positions = agent_positions.reshape(-1, xy) <- in flow field collation
+    num_agents = 0
+
+    centered_and_rotated_agent_positions, angle, translation = normalize_about_sdc(agent_positions, data)
+    centered_and_rotated_agent_positions[:, :, 1] = -centered_and_rotated_agent_positions[:, :, 1]
+    centered_and_rotated_image_agent_positions = get_image_coordinates(centered_and_rotated_agent_positions)
 
     agent_lengths = np.concatenate((data['state/past/length'], data['state/current/length'], data['state/future/length']), axis=1)
     agent_lengths = agent_lengths[type_mask]
@@ -693,7 +740,8 @@ def collate_target_occupancy_grids(data):
     grid_points = torch.FloatTensor(grid_points)
     #grid_points = grid_points.unsqueeze(2).repeat(1, 1, timesteps, 1)
 
-    grid_times = torch.arange(timesteps, dtype=torch.float32) / 10
+    #grid_times = torch.arange(timesteps, dtype=torch.float32) / 10
+    grid_times = torch.arange(2, 10, dtype=torch.float32)
     #grid_times = grid_times.view(1, 1, timesteps, 1).repeat(GRID_SIZE, GRID_SIZE, 1, 1)
     # END TODO
 
@@ -703,20 +751,24 @@ def collate_target_occupancy_grids(data):
     occluded_occupancy_grid = torch.zeros_like(grid_times)
     occluded_occupancy_grid = occluded_occupancy_grid.view(1, 1, timesteps, 1).repeat(GRID_SIZE, GRID_SIZE, 1, 1)
 
-    for t in range(timesteps):
-        grid_points_at_time = grid_points
-        occupancy_grid_at_time = occupancy_grid[:, :, t, :]
-        occluded_occupancy_grid_at_time = occluded_occupancy_grid[:, :, t, :]
+    for t in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20, 30, 40, 50, 60, 70, 80, 90]:#range(timesteps):
+        if t > 11:
+            t_idx = int(t / 10) - 2
+            grid_points_at_time = grid_points
+            occupancy_grid_at_time = occupancy_grid[:, :, t_idx, :]
+            occluded_occupancy_grid_at_time = occluded_occupancy_grid[:, :, t_idx, :]
 
-        agent_positions_at_time = agent_positions[:, t]
+        #agent_positions_at_time = agent_positions[:, t]
+        centered_and_rotated_agent_positions_at_time = centered_and_rotated_agent_positions[:, t]
+        centered_and_rotated_image_agent_positions_at_time = centered_and_rotated_image_agent_positions[:, t]
         agent_lengths_at_time = agent_lengths[:, t]
         agent_widths_at_time = agent_widths[:, t]
         agent_bbox_yaws_at_time = agent_bbox_yaws[:, t]
         is_valid_mask_at_time = is_valid_mask[:, t]
 
-        centered_and_rotated_agent_positions_at_time, angle, translation = normalize_about_sdc(agent_positions_at_time, data)
-        centered_and_rotated_agent_positions_at_time[:, 1] = -centered_and_rotated_agent_positions_at_time[:, 1]
-        centered_and_rotated_image_agent_positions_at_time = get_image_coordinates(centered_and_rotated_agent_positions_at_time)
+        # centered_and_rotated_agent_positions_at_time, angle, translation = normalize_about_sdc(agent_positions_at_time, data)
+        # centered_and_rotated_agent_positions_at_time[:, 1] = -centered_and_rotated_agent_positions_at_time[:, 1]
+        # centered_and_rotated_image_agent_positions_at_time = get_image_coordinates(centered_and_rotated_agent_positions_at_time)
 
         fov_mask_at_time = get_fov_mask(centered_and_rotated_image_agent_positions_at_time)
         point_mask_at_time = np.logical_and(fov_mask_at_time, is_valid_mask_at_time)
@@ -733,14 +785,19 @@ def collate_target_occupancy_grids(data):
             width = agent_widths_at_time[i]
             yaw = agent_bbox_yaws_at_time[i]
             id = agent_ids_at_time[i]
+            num_agents += 1
 
-            bbox_mask = points_contained_in_bbox(grid_points_at_time, center, length, width, -yaw - angle)
-
-            if t < 11 or id in observed_agents:
-                occupancy_grid_at_time[bbox_mask] = 1.0
+            if t < 11:
                 observed_agents.add(id)
             else:
-                occluded_occupancy_grid_at_time[bbox_mask] = 1.0
+                bbox_mask = points_contained_in_bbox(grid_points_at_time, center, length, width, -yaw - angle)
+
+                #if t < 11 or id in observed_agents:
+                if id in observed_agents:
+                    #observed_agents.add(id)
+                    occupancy_grid_at_time[bbox_mask] = 1.0
+                else:
+                    occluded_occupancy_grid_at_time[bbox_mask] = 1.0
 
     return grid_points, grid_times, occupancy_grid, occluded_occupancy_grid
 

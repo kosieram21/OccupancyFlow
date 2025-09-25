@@ -21,10 +21,12 @@ class ExperimentConfig:
     initialize_from_checkpoint: bool
     should_pre_train: bool
     should_fine_tune: bool
+    should_post_train: bool
     should_evaluate: bool
     should_visualize: bool
     pre_train_path: str
     fine_tune_path: str
+    post_train_path: str
     test_path: str
     visualization_path: str
     pre_train_batch_size: int
@@ -37,6 +39,11 @@ class ExperimentConfig:
     fine_tune_lr: float
     fine_tune_weight_decay: float
     fine_tune_gamma: float
+    post_train_batch_size: int
+    post_train_epochs: int
+    post_train_lr: float
+    post_train_weight_decay: float
+    post_train_gamma: float
     test_batch_size: int
     visualization_batch_size: int
     visualization_samples: int
@@ -148,6 +155,12 @@ def distributed_experiment(rank, world_size, config, experiment_id):
             fine_tune(dataloader=fine_tune_dataloader, model=model, device=rank, 
                       epochs=config.fine_tune_epochs, lr=config.fine_tune_lr, weight_decay=config.fine_tune_weight_decay, gamma=config.fine_tune_gamma,
                       logging_enabled=config.logging_enabled, checkpointing_enabled=config.checkpointing_enabled)
+            
+        if config.should_post_train:
+            post_train_dataloader = prepare_dataset(config.post_train_path, config.post_train_batch_size, is_train=True, distributed=True, rank=rank, world_size=world_size)
+            post_train(dataloader=post_train_dataloader, model=model, device=rank, 
+                       epochs=config.pre_train_epochs, lr=config.pre_train_lr, weight_decay=config.pre_train_weight_decay, gamma=config.pre_train_gamma,
+                       logging_enabled=config.logging_enabled, checkpointing_enabled=config.checkpointing_enabled)
 
         if config.should_evaluate:
             test_dataloader = prepare_dataset(config.test_path, config.test_batch_size, is_train=False, distributed=True, rank=rank, world_size=world_size)
@@ -179,10 +192,12 @@ if __name__ == '__main__':
         initialize_from_checkpoint=True,
         should_pre_train=False,
         should_fine_tune=False,
-        should_evaluate=True,
+        should_post_train=True,
+        should_evaluate=False,
         should_visualize=False,
         pre_train_path='../data1/waymo_dataset/v1.1/tensor_cache/training',
         fine_tune_path='../data1/waymo_dataset/v1.1/tensor_cache/training',
+        post_train_path='../data1/waymo_dataset/v1.1/tensor_cache/training',
         test_path='../data1/waymo_dataset/v1.1/tensor_cache/validation',
         visualization_path='../data1/waymo_dataset/v1.1/tensor_cache/validation',
         pre_train_batch_size=16,
@@ -195,6 +210,11 @@ if __name__ == '__main__':
         fine_tune_lr=1e-5,
         fine_tune_weight_decay=0,
         fine_tune_gamma=0.999,
+        post_train_batch_size=25,
+        post_train_epochs=100,
+        post_train_lr=1e-4,
+        post_train_weight_decay=0,
+        post_train_gamma=0.999,
         test_batch_size=1,
         visualization_batch_size=1,
         visualization_samples=100,

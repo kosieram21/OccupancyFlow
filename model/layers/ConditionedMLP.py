@@ -18,7 +18,7 @@ class ConditionedMLP(nn.Module):
 		dim_list = [fourier_expanded_dim] + list(hidden_dims) + [output_dim]
 		layers = []
 		for i in range(len(dim_list) - 1):
-			layers.append(FiLM(dim_list[i], dim_list[i + 1], condition_dim + 1))
+			layers.append(FiLM(dim_list[i], dim_list[i + 1], condition_dim))
 		self.layers = nn.ModuleList(layers)
 
 	def compute_positional_fourier_features(self, x):
@@ -34,16 +34,11 @@ class ConditionedMLP(nn.Module):
 			encodings.append(cos_features)
 		return torch.cat(encodings, dim=-1)
 
-	def _h_dot(self, t, h, scene_context):
-		if scene_context is not None:
-			t = t.expand(h.shape[0], h.shape[1], 1) if len(t.shape) == 0 else t
-			scene_context = scene_context.unsqueeze(1)
-			scene_context = scene_context.expand(scene_context.shape[0], t.shape[1], scene_context.shape[2])
-			context = torch.cat([t, scene_context], dim=-1)
-		else:
-			context = t
+	def _h_dot(self, x, context):
+		context = context.unsqueeze(1)
+		context = context.expand(context.shape[0], x.shape[1], context.shape[2])
 
-		h_dot = h
+		h_dot = x
 		for l, layer in enumerate(self.layers):
 			h_dot = layer(context, h_dot)
 			if l < len(self.layers) - 1:
@@ -51,8 +46,8 @@ class ConditionedMLP(nn.Module):
 
 		return h_dot
 	
-	def forward(self, t, h, scene_context):
-		h_fourier = self.compute_positional_fourier_features(h) if self.num_fourier_features > 0 else h
-		h_dot = self._h_dot(t, h_fourier, scene_context)
+	def forward(self, x, context):
+		h_fourier = self.compute_positional_fourier_features(x) if self.num_fourier_features > 0 else x
+		h_dot = self._h_dot(h_fourier, context)
 		h_dot = torch.sigmoid(h_dot) # TODO: should this be in a seperate occupancy estimate head class?
 		return h_dot

@@ -22,32 +22,50 @@ class OccupancyFlowNetFineTuningHarness(OccupancyFlowNetTrainingHarness):
         return flow_loss, occupancy_loss
     
 class OccupancyFlowNetPostTrainingHarness(OccupancyFlowNetTrainingHarness):
-    def forward(self, times, positions, road_map, agent_trajectories, agent_ids, agent_mask=None):
-        # TODO: need to split times and positions based on agents present in the observed window and those who are not
-        # TODO: we would need to produce a large amount of dummy values and drive them down to 0
-        # TODO: basic idea... generate tuples creating a mesh over the scene. tuples that are occupied should have gt 1 otherwise 0
-        # TODO: what should we call the loss (binary cross-entropy) for occupancy estimation...
-        occupancy_loss = 0
-        occluded_occupancy_loss = 0
-        return occupancy_loss, occluded_occupancy_loss
+    def forward(self, t, times, positions, unoccluded_occupancies, occluded_occupancies, scene_context):
+        batch, length, width, _, _ = unoccluded_occupancies.shape
+        
+        times = times[:, t].view(batch, 1, 1).expand(batch, length * width, 1)
+        
+        spatiotemporal_coordinates = torch.cat([positions, times], dim=-1)
 
-def move_batch_to_device(batch, device):
-    road_map, agent_trajectories, \
-    flow_field_agent_ids, flow_field_positions, flow_field_times, flow_field_velocities, \
-    agent_mask, flow_field_mask = batch
-    
-    road_map = road_map.to(device)
-    agent_trajectories = agent_trajectories.to(device)
-    flow_field_agent_ids = flow_field_agent_ids.to(device)
-    flow_field_positions = flow_field_positions.to(device)
-    flow_field_times = flow_field_times.to(device)
-    flow_field_velocities = flow_field_velocities.to(device)
-    agent_mask = agent_mask.to(device)
-    flow_field_mask = flow_field_mask.to(device)
+        estimated_occupancies, _ = self.base_model.occupancy_estimation_head(spatiotemporal_coordinates, scene_context)
+        estimated_unoccluded_occupancies = estimated_occupancies[:, :, 0]
+        estimated_occluded_occupancues = estimated_occupancies[:, :, 1]
+
+        estimated_unoccluded_occupancies = estimated_unoccluded_occupancies.reshape(batch, length, width, 1)
+        ground_truth_unoccluded_occupancies = unoccluded_occupancies[:, :, :, t, :]
+
+        estimated_occluded_occupancues = estimated_occluded_occupancues.reshape(batch, length, width, 1)
+        ground_truth_occluded_occupancies = occluded_occupancies[:, :, :, t, :]
+
+        criterion = nn.BCELoss()
+        unoccluded_loss = criterion(estimated_unoccluded_occupancies, ground_truth_unoccluded_occupancies)
+        occluded_loss = criterion(estimated_occluded_occupancues, ground_truth_occluded_occupancies)
+
+        return unoccluded_loss, occluded_loss
+
+def move_batch_to_device(scene, device):
+    road_map = scene.observed_state.road_map.to(device)
+    agent_trajectories = scene.observed_state.agent_trajectories.to(device)
+
+    flow_field_agent_ids = scene.flow_field.agent_ids.to(device)
+    flow_field_positions = scene.flow_field.positions.to(device)
+    flow_field_times = scene.flow_field.times.to(device)
+    flow_field_velocities = scene.flow_field.velocities.to(device)
+
+    occupancy_grid_positions = scene.occupancy_grid.positions.to(device)
+    occupancy_grid_times = scene.occupancy_grid.times.to(device)
+    occupancy_grid_unoccluded_occupancies = scene.occupancy_grid.unoccluded_occupancies.to(device)
+    occupancy_grid_occluded_occupancies = scene.occupancy_grid.occluded_occupancies.to(device)
+
+    agent_mask = scene.observed_state.agent_mask.to(device)
+    flow_field_mask = scene.flow_field.flow_mask.to(device)
 
     return \
         road_map, agent_trajectories, \
         flow_field_agent_ids, flow_field_positions, flow_field_times, flow_field_velocities, \
+        occupancy_grid_positions, occupancy_grid_times, occupancy_grid_unoccluded_occupancies, occupancy_grid_occluded_occupancies, \
         agent_mask, flow_field_mask
 
 # TODO: should this be moved to a shared location?
@@ -193,10 +211,11 @@ def pre_train(dataloader, model, device,
         epoch_loss = torch.tensor(0.0, device=device)
         num_batches = 0
 
-        for batch in dataloader:
+        for scene in dataloader:
             road_map, agent_trajectories, \
-            flow_field_agent_ids, flow_field_positions, flow_field_times, flow_field_velocities, \
-            agent_mask, flow_field_mask = move_batch_to_device(batch, device)
+            _, flow_field_positions, flow_field_times, flow_field_velocities, \
+            _, _, _, _, \
+            agent_mask, flow_field_mask = move_batch_to_device(scene, device)
 
             loss = pre_train_harness(flow_field_times, flow_field_positions, flow_field_velocities, 
                                      road_map, agent_trajectories, 
@@ -261,10 +280,11 @@ def fine_tune(dataloader, model, device,
         epoch_occupancy_loss = torch.tensor(0.0, device=device)
         num_batches = 0
 
-        for batch in dataloader:
+        for scene in dataloader:
             road_map, agent_trajectories, \
             flow_field_agent_ids, flow_field_positions, flow_field_times, flow_field_velocities, \
-            agent_mask, flow_field_mask = move_batch_to_device(batch, device)
+            _, _, _, _, \
+            agent_mask, flow_field_mask = move_batch_to_device(scene, device)
             
             flow_loss, occupancy_loss = fine_tune_harness(flow_field_times, flow_field_positions, flow_field_velocities, 
                                                           road_map, agent_trajectories, 
@@ -316,5 +336,103 @@ def fine_tune(dataloader, model, device,
         if checkpointing_enabled:
             save_checkpoint(fine_tune_harness, f'checkpoints/finetune', f'occupancy_flow_checkpoint{epoch}')
 
-def post_train(dataloader, model, device):
-    return None
+def post_train(dataloader, model, device,
+               epochs, lr, weight_decay, gamma, 
+               logging_enabled=False, checkpointing_enabled=False):
+    post_train_harness = OccupancyFlowNetPostTrainingHarness(model)
+    if dist.is_initialized():
+        post_train_harness = nn.parallel.DistributedDataParallel(post_train_harness, device_ids=[device], find_unused_parameters=True)
+
+    post_train_harness.train()
+
+    scene_encoder = post_train_harness.module.base_model.scene_encoder if dist.is_initialized() else post_train_harness.base_model.scene_encoder
+    for param in scene_encoder.parameters():
+        param.requires_grad = False
+
+    optim = torch.optim.Adam(post_train_harness.parameters(), lr=lr, weight_decay=weight_decay)
+    scheduler = torch.optim.lr_scheduler.ExponentialLR(optim, gamma=gamma)
+
+    if logging_enabled:
+        wandb.define_metric("post-train batch loss", step_metric="post-train batch")
+        wandb.define_metric("post-train batch occluded occupancy loss", step_metric="post-train batch")
+        wandb.define_metric("post-train batch unooccluded occupancy loss", step_metric="post-train batch")
+        wandb.define_metric("post-train epoch loss", step_metric="post-train epoch")
+        wandb.define_metric("post-train epoch occluded occupancy loss", step_metric="post-train epoch")
+        wandb.define_metric("post-train epoch unoccluded occupancy loss", step_metric="post-train epoch")
+        wandb.define_metric("post-train batch", hidden=True)
+        wandb.define_metric("post-train epoch", hidden=True)
+
+    total_batches = 0
+    for epoch in range(epochs):
+        epoch_loss = torch.tensor(0.0, device=device)
+        epoch_occluded_occupancy_loss = torch.tensor(0.0, device=device)
+        epoch_unoccluded_occupancy_loss = torch.tensor(0.0, device=device)
+        num_batches = 0
+
+        for scene in dataloader:
+            road_map, agent_trajectories, \
+            _, _, _, _, \
+            occupancy_grid_positions, occupancy_grid_times, occupancy_grid_unoccluded_occupancies, occupancy_grid_occluded_occupancies, \
+            agent_mask, _ = move_batch_to_device(scene, device)
+
+            with torch.no_grad():
+                scene_context = scene_encoder(road_map, agent_trajectories, agent_mask)
+
+            total_loss = 0
+            total_occluded_occupancy_loss = 0
+            total_unoccluded_occupancy_loss = 0
+
+            _, _, time, _ = occupancy_grid_unoccluded_occupancies.shape
+            for t in range(time):
+                occluded_occupancy_loss, unoccluded_occupancy_loss = post_train_harness(t, occupancy_grid_times, occupancy_grid_positions, 
+                                                                                        occupancy_grid_unoccluded_occupancies, occupancy_grid_occluded_occupancies,
+                                                                                        scene_context)
+                
+                loss = occluded_occupancy_loss + unoccluded_occupancy_loss
+
+                optim.zero_grad()
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(post_train_harness.parameters(), max_norm=1.0)
+                optim.step()
+
+                total_loss += loss.detach()
+                total_occluded_occupancy_loss += occluded_occupancy_loss.detach()
+                total_unoccluded_occupancy_loss += unoccluded_occupancy_loss()
+
+            #TODO: can we do this with only one call to nccl?
+            total_loss = aggregate_loss(total_loss)
+            total_occluded_occupancy_loss = aggregate_loss(total_occluded_occupancy_loss)
+            total_unoccluded_occupancy_loss = aggregate_loss(total_unoccluded_occupancy_loss)
+
+            if logging_enabled:
+                wandb.log({
+                    "post-train batch loss": total_loss,
+                    "post-train batch occluded occupancy loss": total_occluded_occupancy_loss,
+                    "post-train batch unooccluded occupancy loss": total_unoccluded_occupancy_loss, 
+                    "post-train batch": total_batches
+                })
+                print(f'Batch {total_batches+1} (post-train), Loss: {total_loss:.6f}, Occluded Occupancy Loss: {total_occluded_occupancy_loss:.6f}, Unoccluded Occupancy Loss: {total_unoccluded_occupancy_loss:.6f}')
+
+            epoch_loss += total_loss
+            epoch_occluded_occupancy_loss += total_occluded_occupancy_loss
+            epoch_unoccluded_occupancy_loss += total_unoccluded_occupancy_loss
+            num_batches += 1
+            total_batches += 1
+
+        scheduler.step()
+
+        avg_loss = epoch_loss / num_batches
+        avg_occluded_occupancy_loss = epoch_occluded_occupancy_loss / num_batches
+        avg_unoccluded_occupancy_loss = epoch_unoccluded_occupancy_loss / num_batches
+        
+        if logging_enabled:
+            wandb.log({
+                "post-train epoch loss": avg_loss, 
+                "post-train epoch occluded occupancy loss": avg_occluded_occupancy_loss,
+                "post-train epoch unoccluded occupancy loss": avg_unoccluded_occupancy_loss,
+                "post-train epoch": epoch
+            })
+            print(f'Epoch {epoch+1}/{epochs} (post-train), Loss: {avg_loss:.6f}, Occluded Occupancy Loss: {avg_occluded_occupancy_loss:.6f}, Unoccluded Occupancy Loss: {avg_unoccluded_occupancy_loss:.6f} LR: {scheduler.get_last_lr()[0]:.6f}')
+
+        if checkpointing_enabled:
+            save_checkpoint(post_train_harness, f'checkpoints/posttrain', f'occupancy_flow_checkpoint{epoch}')

@@ -26,8 +26,6 @@ if __name__ == "__main__":
     if not os.path.exists(args.idx_dir):
         create_idx(args.tfrecord_dir, args.idx_dir)
 
-    print(torch.get_num_threads())
-    print(os.cpu_count())
     num_workers = 1#torch.get_num_threads()
 
     processes = []
