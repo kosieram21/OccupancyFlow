@@ -29,7 +29,7 @@ class OccupancyFlowNetPostTrainingHarness(OccupancyFlowNetTrainingHarness):
         
         spatiotemporal_coordinates = torch.cat([positions, times], dim=-1)
 
-        estimated_occupancies, _ = self.base_model.occupancy_estimation_head(spatiotemporal_coordinates, scene_context)
+        estimated_occupancies = self.base_model.occupancy_estimation_head(spatiotemporal_coordinates, scene_context)
         estimated_unoccluded_occupancies = estimated_occupancies[:, :, 0]
         estimated_occluded_occupancues = estimated_occupancies[:, :, 1]
 
@@ -364,9 +364,9 @@ def post_train(dataloader, model, device,
 
     total_batches = 0
     for epoch in range(epochs):
-        epoch_loss = torch.tensor(0.0, device=device)
-        epoch_occluded_occupancy_loss = torch.tensor(0.0, device=device)
-        epoch_unoccluded_occupancy_loss = torch.tensor(0.0, device=device)
+        epoch_loss = 0.0
+        epoch_occluded_occupancy_loss = 0.0
+        epoch_unoccluded_occupancy_loss = 0.0
         num_batches = 0
 
         for scene in dataloader:
@@ -378,11 +378,13 @@ def post_train(dataloader, model, device,
             with torch.no_grad():
                 scene_context = scene_encoder(road_map, agent_trajectories, agent_mask)
 
-            total_loss = 0
-            total_occluded_occupancy_loss = 0
-            total_unoccluded_occupancy_loss = 0
+            total_loss = 0.0
+            total_occluded_occupancy_loss = 0.0
+            total_unoccluded_occupancy_loss = 0.0
 
-            _, _, time, _ = occupancy_grid_unoccluded_occupancies.shape
+            batch, length, width, time, _ = occupancy_grid_unoccluded_occupancies.shape
+            occupancy_grid_positions = occupancy_grid_positions.reshape(batch, length * width, 2)
+
             for t in range(time):
                 occluded_occupancy_loss, unoccluded_occupancy_loss = post_train_harness(t, occupancy_grid_times, occupancy_grid_positions, 
                                                                                         occupancy_grid_unoccluded_occupancies, occupancy_grid_occluded_occupancies,
@@ -395,14 +397,14 @@ def post_train(dataloader, model, device,
                 torch.nn.utils.clip_grad_norm_(post_train_harness.parameters(), max_norm=1.0)
                 optim.step()
 
-                total_loss += loss.detach()
-                total_occluded_occupancy_loss += occluded_occupancy_loss.detach()
-                total_unoccluded_occupancy_loss += unoccluded_occupancy_loss()
+                total_loss += loss.item()
+                total_occluded_occupancy_loss += occluded_occupancy_loss.item()
+                total_unoccluded_occupancy_loss += unoccluded_occupancy_loss.item()
 
             #TODO: can we do this with only one call to nccl?
-            total_loss = aggregate_loss(total_loss)
-            total_occluded_occupancy_loss = aggregate_loss(total_occluded_occupancy_loss)
-            total_unoccluded_occupancy_loss = aggregate_loss(total_unoccluded_occupancy_loss)
+            total_loss = aggregate_loss(torch.tensor(total_loss / time, device=device))
+            total_occluded_occupancy_loss = aggregate_loss(torch.tensor(total_occluded_occupancy_loss / time, device=device))
+            total_unoccluded_occupancy_loss = aggregate_loss(torch.tensor(total_unoccluded_occupancy_loss / time, device=device))
 
             if logging_enabled:
                 wandb.log({

@@ -237,6 +237,11 @@ def visualize(dataloader, model, device,
         occupancy_grid_times = scene.occupancy_grid.times
         occupancy_grid_unoccluded_occupancies = scene.occupancy_grid.unoccluded_occupancies
         occupancy_grid_occluded_occupancies = scene.occupancy_grid.occluded_occupancies
+        print('----------------------')
+        print(occupancy_grid_positions.shape)
+        print(occupancy_grid_times.shape)
+        print(occupancy_grid_unoccluded_occupancies.shape)
+        print(occupancy_grid_occluded_occupancies.shape)
 
         agent_mask = scene.observed_state.agent_mask
         flow_field_mask = scene.flow_field.flow_mask

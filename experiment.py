@@ -67,7 +67,7 @@ def build_model(config, device):
     if config.initialize_from_checkpoint:
         # TODO: configurable checkpoint root and id
         #model.load_state_dict(torch.load(f'checkpoints/pretrain/occupancy_flow_checkpoint{config.pre_train_epochs - 1}.pt'))
-        model.load_state_dict(torch.load(f'checkpoints/finetune/occupancy_flow_checkpoint12.pt'))
+        model.load_state_dict(torch.load(f'checkpoints/finetune/occupancy_flow_checkpoint12.pt'), strict=False)
         #model.load_state_dict(torch.load(f'checkpoints/pretrain/occupancy_flow_checkpoint99.pt'))
 
     return model
@@ -87,7 +87,7 @@ def prepare_dataset(path, batch_size, is_train=True, distributed=False, rank=0, 
         batch_size=batch_size,
         sampler=sampler,
         shuffle=(sampler is None and shuffle),
-        num_workers=min(batch_size, torch.get_num_threads()),
+        num_workers=min(batch_size, torch.get_num_threads() // world_size),
         collate_fn=waymo_cached_collate_fn,
         pin_memory=True
     )
@@ -118,6 +118,12 @@ def single_device_experiment(config):
         fine_tune(dataloader=fine_tune_dataloader, model=model, device=device, 
                   epochs=config.fine_tune_epochs, lr=config.fine_tune_lr, weight_decay=config.fine_tune_weight_decay, gamma=config.fine_tune_gamma,
                   logging_enabled=config.logging_enabled, checkpointing_enabled=config.checkpointing_enabled)
+        
+    if config.should_post_train:
+        post_train_dataloader = prepare_dataset(config.post_train_path, config.post_train_batch_size, is_train=True, distributed=False)
+        post_train(dataloader=post_train_dataloader, model=model, device=device,
+                   epochs=config.pre_train_epochs, lr=config.pre_train_lr, weight_decay=config.pre_train_weight_decay, gamma=config.pre_train_gamma,
+                   logging_enabled=config.logging_enabled, checkpointing_enabled=config.checkpointing_enabled)
 
     if config.should_evaluate:
         test_dataloader = prepare_dataset(config.test_path, config.test_batch_size, is_train=False, distributed=False)
@@ -187,7 +193,7 @@ def multi_device_experiment(config):
 if __name__ == '__main__':
     config = ExperimentConfig(
         data_parallel=True,
-        logging_enabled=False,
+        logging_enabled=True,
         checkpointing_enabled=True,
         initialize_from_checkpoint=True,
         should_pre_train=False,
@@ -210,7 +216,7 @@ if __name__ == '__main__':
         fine_tune_lr=1e-5,
         fine_tune_weight_decay=0,
         fine_tune_gamma=0.999,
-        post_train_batch_size=25,
+        post_train_batch_size=16,#24,
         post_train_epochs=100,
         post_train_lr=1e-4,
         post_train_weight_decay=0,
